@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cirkit
+      POSTGRES_PASSWORD: cirkit
+      POSTGRES_DB: cirkit
+    ports:
+      - "5433:5432"               # 5433 on your computer, so it won't clash with your installed PostgreSQL
+    volumes:
+      - pgdata:/var/lib/postgresql   # version 18 stores data here, not in /data
+
+volumes:
+  pgdata:
