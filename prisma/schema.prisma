@@ -13,15 +13,19 @@ datasource db {
 }
 
 model User {
-  id            String    @id
+  id            String            @id
   name          String
   email         String
-  emailVerified Boolean   @default(false)
+  emailVerified Boolean           @default(false)
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
   sessions      Session[]
   accounts      Account[]
+  // 业务关联：用户拥有的物品、组成员关系及借用申请。
+  memberships   GroupMembership[]
+  ownedItems    Item[]            @relation("ItemOwner")
+  requests      Request[]         @relation("RequestBorrower")
 
   @@unique([email])
   @@map("user")
@@ -73,4 +77,115 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+// Roles of the group membership
+enum MembershipRole {
+  OWNER
+  MEMBER
+}
+
+// Item status
+enum ItemStatus {
+  AVAILABLE
+  BORROWED
+}
+
+// Request status Version 1: No confirmation that the item is actually being transfered
+enum RequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  CANCELLED
+  COMPLETED
+}
+
+model Group {
+  groupId        String   @id @default(cuid())
+  groupName      String
+  groupCreatedAt DateTime @default(now())
+  groupUpdatedAt DateTime @updatedAt
+
+  memberships  GroupMembership[]
+  itemAccesses ItemAccess[]
+  requests     Request[]
+}
+
+/// 用户与组的成员关系，供借用接口检查组访问权限。
+model GroupMembership {
+  membershipId        String         @id @default(cuid())
+  groupId             String
+  userId              String
+  membershipRole      MembershipRole @default(MEMBER)
+  membershipCreatedAt DateTime       @default(now())
+  membershipUpdatedAt DateTime       @updatedAt
+
+  group Group @relation(fields: [groupId], references: [groupId], onDelete: Restrict)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  // ensure same user can not be enrolled in the same group more than once
+  @@unique([groupId, userId])
+  @@index([userId])
+}
+
+/// User's item
+model Item {
+  itemId          String     @id @default(cuid())
+  ownerId         String
+  itemName        String
+  itemDescription String
+  itemCategory    String
+  itemCondition   String
+  itemStatus      ItemStatus @default(AVAILABLE)
+
+  itemArchivedAt DateTime?
+  itemCreatedAt  DateTime  @default(now())
+  itemUpdatedAt  DateTime  @updatedAt
+
+  owner        User         @relation("ItemOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  itemAccesses ItemAccess[]
+  requests     Request[]
+
+  // Active/Inactive 根据 Pending 申请或 Borrowed 状态计算，不另存字段。
+  @@index([ownerId])
+}
+
+/// A item can be opened to many groups; revoke it's access to a certain group does not erase it's history
+model ItemAccess {
+  itemAccessId        String   @id @default(cuid())
+  itemId              String
+  groupId             String
+  itemAccessCreatedAt DateTime @default(now())
+
+  item  Item  @relation(fields: [itemId], references: [itemId], onDelete: Restrict)
+  group Group @relation(fields: [groupId], references: [groupId], onDelete: Restrict)
+
+  @@unique([itemId, groupId])
+  @@index([groupId])
+}
+
+/// Approved = Item Borrowed Returned = Item AVAILABLE
+model Request {
+  requestId  String @id @default(cuid())
+  itemId     String
+  borrowerId String
+
+  groupId String
+
+  // PostgreSQL DATE
+  requestStartDate DateTime      @db.Date
+  requestEndDate   DateTime      @db.Date
+  requestStatus    RequestStatus @default(PENDING)
+  requestCreatedAt DateTime      @default(now())
+  requestUpdatedAt DateTime      @updatedAt
+
+  requestCompletedAt DateTime?
+
+  item     Item  @relation(fields: [itemId], references: [itemId], onDelete: Restrict)
+  borrower User  @relation("RequestBorrower", fields: [borrowerId], references: [id], onDelete: Restrict)
+  group    Group @relation(fields: [groupId], references: [groupId], onDelete: Restrict)
+
+  @@index([itemId, requestStatus])
+  @@index([borrowerId, requestCreatedAt])
+  @@index([groupId, requestStatus])
 }
