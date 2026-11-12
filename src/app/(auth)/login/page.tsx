@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 
 import { LoginForm } from "@/components/auth/login-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { readRedirectParam, redirectIfSignedIn } from "../_lib/redirect-if-signed-in";
+import { getEnabledSocialProviders } from "@/server/auth/providers";
+import { readAuthParams, redirectIfSignedIn } from "../_lib/redirect-if-signed-in";
 
 export const metadata: Metadata = { title: "Sign in · CirKit" };
 
@@ -27,9 +28,15 @@ export default function LoginPage({ searchParams }: Props) {
 }
 
 async function LoginContent({ searchParams }: Props) {
-  const redirectTo = await readRedirectParam(searchParams);
+  const { redirectTo, oauthError } = await readAuthParams(searchParams);
   await redirectIfSignedIn(redirectTo);
-  return <LoginForm redirectTo={redirectTo} />;
+  return (
+    <LoginForm
+      redirectTo={redirectTo}
+      oauthError={oauthError}
+      socialProviders={getEnabledSocialProviders()}
+    />
+  );
 }
 
 function FormSkeleton() {

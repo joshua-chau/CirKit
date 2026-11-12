@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 
 import { SignupForm } from "@/components/auth/signup-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { readRedirectParam, redirectIfSignedIn } from "../_lib/redirect-if-signed-in";
+import { getEnabledSocialProviders } from "@/server/auth/providers";
+import { readAuthParams, redirectIfSignedIn } from "../_lib/redirect-if-signed-in";
 
 export const metadata: Metadata = { title: "Sign up · CirKit" };
 
@@ -26,7 +27,13 @@ export default function SignupPage({ searchParams }: Props) {
 }
 
 async function SignupContent({ searchParams }: Props) {
-  const redirectTo = await readRedirectParam(searchParams);
+  const { redirectTo, oauthError } = await readAuthParams(searchParams);
   await redirectIfSignedIn(redirectTo);
-  return <SignupForm redirectTo={redirectTo} />;
+  return (
+    <SignupForm
+      redirectTo={redirectTo}
+      oauthError={oauthError}
+      socialProviders={getEnabledSocialProviders()}
+    />
+  );
 }

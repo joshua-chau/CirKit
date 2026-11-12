@@ -2,15 +2,25 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 
-import { safeRedirectPath } from "@/lib/routes";
+import { REDIRECT_PARAM, safeRedirectPath } from "@/lib/routes";
 import { getSession } from "@/server/auth/session";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-/** Reads `?redirect=` from the page's searchParams (first value if repeated). */
-export async function readRedirectParam(searchParams: SearchParams): Promise<string | undefined> {
-  const value = (await searchParams).redirect;
+function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+/**
+ * Reads `?redirect=` (where to go after login) and `?error=` (set by Better
+ * Auth when a GitHub/Google login fails) from the page's searchParams.
+ */
+export async function readAuthParams(searchParams: SearchParams) {
+  const params = await searchParams;
+  return {
+    redirectTo: first(params[REDIRECT_PARAM]),
+    oauthError: first(params.error),
+  };
 }
 
 /**

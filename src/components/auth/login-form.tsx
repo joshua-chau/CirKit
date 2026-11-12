@@ -5,20 +5,29 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { FormField } from "@/components/auth/form-field";
+import { SocialButtons } from "@/components/auth/social-buttons";
 import { Button } from "@/components/ui/button";
 import { signIn } from "@/lib/auth-client";
-import { REDIRECT_PARAM, SIGNUP_PATH, safeRedirectPath } from "@/lib/routes";
+import { LOGIN_PATH, REDIRECT_PARAM, SIGNUP_PATH, safeRedirectPath } from "@/lib/routes";
 import {
   authErrorMessage,
   loginSchema,
   toFieldErrors,
   type FieldErrors,
 } from "@/lib/validation/auth.schema";
+import { oauthErrorMessage, type SocialProvider } from "@/lib/social-providers";
 
-export function LoginForm({ redirectTo }: { redirectTo?: string }) {
+type Props = {
+  redirectTo?: string;
+  /** `?error=` code from a failed GitHub/Google login. */
+  oauthError?: string;
+  socialProviders: SocialProvider[];
+};
+
+export function LoginForm({ redirectTo, oauthError, socialProviders }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(() => oauthErrorMessage(oauthError));
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   // Pass the redirect target through to /signup so it survives the switch.
@@ -56,40 +65,48 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="grid gap-4">
-      <FormField
-        name="email"
-        label="Email"
-        type="email"
-        autoComplete="email"
-        required
-        error={fieldErrors.email}
+    <div className="grid gap-4">
+      <SocialButtons
+        providers={socialProviders}
+        redirectTo={redirectTo}
+        errorPath={LOGIN_PATH}
+        disabled={pending}
       />
-      <FormField
-        name="password"
-        label="Password"
-        type="password"
-        autoComplete="current-password"
-        required
-        error={fieldErrors.password}
-      />
+      <form onSubmit={handleSubmit} noValidate className="grid gap-4">
+        <FormField
+          name="email"
+          label="Email"
+          type="email"
+          autoComplete="email"
+          required
+          error={fieldErrors.email}
+        />
+        <FormField
+          name="password"
+          label="Password"
+          type="password"
+          autoComplete="current-password"
+          required
+          error={fieldErrors.password}
+        />
 
-      {formError ? (
-        <p role="alert" className="text-sm text-destructive">
-          {formError}
+        {formError ? (
+          <p role="alert" className="text-sm text-destructive">
+            {formError}
+          </p>
+        ) : null}
+
+        <Button type="submit" size="lg" disabled={pending}>
+          {pending ? "Signing in…" : "Sign in"}
+        </Button>
+
+        <p className="text-center text-sm text-muted-foreground">
+          Don&apos;t have an account?{" "}
+          <Link href={signupHref} className="font-medium text-foreground underline-offset-4 hover:underline">
+            Sign up
+          </Link>
         </p>
-      ) : null}
-
-      <Button type="submit" size="lg" disabled={pending}>
-        {pending ? "Signing in…" : "Sign in"}
-      </Button>
-
-      <p className="text-center text-sm text-muted-foreground">
-        Don&apos;t have an account?{" "}
-        <Link href={signupHref} className="font-medium text-foreground underline-offset-4 hover:underline">
-          Sign up
-        </Link>
-      </p>
-    </form>
+      </form>
+    </div>
   );
 }
