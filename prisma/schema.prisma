@@ -17,7 +17,7 @@ model User {
   name          String
   email         String
   emailVerified Boolean   @default(false)
-  image         String`?
+  image         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   sessions      Session[]
@@ -82,8 +82,17 @@ model Verification {
 }
 
 
-enum GroupRole { OWNER MEMBER }
-enum InvitationStatus { PENDING ACCEPTED DECLINED REVOKED EXPIRED }
+enum GroupRole {
+  OWNER
+  MEMBER
+}
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REVOKED
+  EXPIRED
+}
 
 model Group {
   id          String            @id @default(cuid())
@@ -105,7 +114,7 @@ model GroupMember {
   group    Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@unique([groupId, userId])
-  @@index([userId`])
+  @@index([userId])
   @@map("group_member")
 }
 
