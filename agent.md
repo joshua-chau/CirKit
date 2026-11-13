@@ -232,3 +232,12 @@ createdAt)`.
 4. Removing/leaving with active borrows: block, or allow and keep borrows?
    Spec says this is decided separately — keep `assertNoActiveBorrows` as the
    single place to implement it.
+
+
+
+
+Todo:
+      Group logic
+      Group page
+      Sign out button for the dashboard
+      Sign out button for group page

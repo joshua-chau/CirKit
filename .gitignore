@@ -44,3 +44,7 @@ next-env.d.ts
 
 # allow the example env file for teammates
 !.env.example
+
+agent.md
+
+notetomyself.md
