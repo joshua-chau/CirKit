@@ -288,10 +288,10 @@ test("Request Controllers over real Next.js HTTP and Better Auth cookies", { tim
     const borrower = await signUp("borrower");
     const borrower2 = await signUp("borrower2");
     const outsider = await signUp("outsider");
-    await database.query(`INSERT INTO "Group" ("groupId", "groupName", "groupUpdatedAt")
+    await database.query(`INSERT INTO "group" ("id", "name", "updatedAt")
       VALUES ('group', 'First group', NOW()), ('group2', 'Second group', NOW())`);
-    await database.query(`INSERT INTO "GroupMembership"
-      ("membershipId", "groupId", "userId", "membershipRole", "membershipUpdatedAt") VALUES
+    await database.query(`INSERT INTO "group_member"
+      ("id", "groupId", "userId", "role", "joinedAt") VALUES
       ('owner-member', 'group', $1, 'OWNER', NOW()),
       ('borrower-member', 'group', $2, 'MEMBER', NOW()),
       ('borrower2-member', 'group', $3, 'MEMBER', NOW()),

@@ -68,10 +68,10 @@ export async function createRequest(
       // The source group must exist.
       const group = await transaction.group.findUnique({
         where: {
-          groupId: input.groupId,
+          id: input.groupId,
         },
         select: {
-          groupId: true,
+          id: true,
         },
       });
 
@@ -83,7 +83,7 @@ export async function createRequest(
       }
 
       // Both MEMBER and OWNER roles may borrow another member's item.
-      const membership = await transaction.groupMembership.findUnique({
+      const membership = await transaction.groupMember.findUnique({
         where: {
           groupId_userId: {
             groupId: input.groupId,

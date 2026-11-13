@@ -13,19 +13,23 @@ datasource db {
 }
 
 model User {
-  id            String            @id
-  name          String
-  email         String
-  emailVerified Boolean           @default(false)
-  image         String?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  // 业务关联：用户拥有的物品、组成员关系及借用申请。
-  memberships   GroupMembership[]
-  ownedItems    Item[]            @relation("ItemOwner")
-  requests      Request[]         @relation("RequestBorrower")
+  id              String            @id
+  name            String
+  email           String
+  emailVerified   Boolean           @default(false)
+  image           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  sessions        Session[]
+  accounts        Account[]
+
+
+
+  groupMemberships     GroupMember[]
+  ownedItems      Item[]            @relation("ItemOwner")
+  requests        Request[]         @relation("RequestBorrower")
+
+  sentInvitations GroupInvitation[]
 
   @@unique([email])
   @@map("user")
@@ -79,10 +83,19 @@ model Verification {
   @@map("verification")
 }
 
-// Roles of the group membership
-enum MembershipRole {
+
+enum GroupRole {
   OWNER
   MEMBER
+}
+
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REVOKED
+  EXPIRED
 }
 
 // Item status
@@ -101,31 +114,65 @@ enum RequestStatus {
 }
 
 model Group {
-  groupId        String   @id @default(cuid())
-  groupName      String
-  groupCreatedAt DateTime @default(now())
-  groupUpdatedAt DateTime @updatedAt
 
-  memberships  GroupMembership[]
+  id          String   @id @default(cuid())
+  name        String
+  // 新增可选的组描述。
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+
+  members      GroupMember[]
+
+  invitations  GroupInvitation[]
+
   itemAccesses ItemAccess[]
   requests     Request[]
+
+
+  @@map("group")
 }
 
-/// 用户与组的成员关系，供借用接口检查组访问权限。
-model GroupMembership {
-  membershipId        String         @id @default(cuid())
-  groupId             String
-  userId              String
-  membershipRole      MembershipRole @default(MEMBER)
-  membershipCreatedAt DateTime       @default(now())
-  membershipUpdatedAt DateTime       @updatedAt
 
-  group Group @relation(fields: [groupId], references: [groupId], onDelete: Restrict)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Restrict)
+model GroupMember {
 
-  // ensure same user can not be enrolled in the same group more than once
+  id       String    @id @default(cuid())
+  groupId  String
+  userId   String
+  role     GroupRole @default(MEMBER)
+
+  joinedAt DateTime  @default(now())
+
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+
   @@unique([groupId, userId])
   @@index([userId])
+
+  @@map("group_member")
+}
+
+
+model GroupInvitation {
+  id          String           @id @default(cuid())
+  groupId     String
+  email       String
+  invitedById String
+
+  token       String           @unique
+  status      InvitationStatus @default(PENDING)
+  expiresAt   DateTime
+  createdAt   DateTime         @default(now())
+
+
+  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  invitedBy User  @relation(fields: [invitedById], references: [id])
+
+  @@index([email])
+  @@map("group_invitation")
 }
 
 /// User's item
@@ -146,7 +193,7 @@ model Item {
   itemAccesses ItemAccess[]
   requests     Request[]
 
-  // Active/Inactive 根据 Pending 申请或 Borrowed 状态计算，不另存字段。
+
   @@index([ownerId])
 }
 
@@ -158,7 +205,8 @@ model ItemAccess {
   itemAccessCreatedAt DateTime @default(now())
 
   item  Item  @relation(fields: [itemId], references: [itemId], onDelete: Restrict)
-  group Group @relation(fields: [groupId], references: [groupId], onDelete: Restrict)
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Restrict)
 
   @@unique([itemId, groupId])
   @@index([groupId])
@@ -183,7 +231,8 @@ model Request {
 
   item     Item  @relation(fields: [itemId], references: [itemId], onDelete: Restrict)
   borrower User  @relation("RequestBorrower", fields: [borrowerId], references: [id], onDelete: Restrict)
-  group    Group @relation(fields: [groupId], references: [groupId], onDelete: Restrict)
+
+  group    Group @relation(fields: [groupId], references: [id], onDelete: Restrict)
 
   @@index([itemId, requestStatus])
   @@index([borrowerId, requestCreatedAt])

@@ -86,10 +86,10 @@ test("借用模型的真实 PostgreSQL 约束", async (context) => {
     await client.query(`INSERT INTO "user" ("id", "name", "email", "updatedAt")
       VALUES ('owner', 'Owner', 'owner@example.invalid', NOW()),
              ('borrower', 'Borrower', 'borrower@example.invalid', NOW())`);
-    await client.query(`INSERT INTO "Group" ("groupId", "groupName", "groupUpdatedAt")
+    await client.query(`INSERT INTO "group" ("id", "name", "updatedAt")
       VALUES ('group', 'Test group', NOW())`);
-    await client.query(`INSERT INTO "GroupMembership"
-      ("membershipId", "groupId", "userId", "membershipUpdatedAt")
+    await client.query(`INSERT INTO "group_member"
+      ("id", "groupId", "userId", "joinedAt")
       VALUES ('membership', 'group', 'borrower', NOW())`);
     await client.query(`INSERT INTO "Item"
       ("itemId", "ownerId", "itemName", "itemDescription", "itemCategory", "itemCondition", "itemUpdatedAt")
@@ -119,10 +119,10 @@ test("借用模型的真实 PostgreSQL 约束", async (context) => {
     });
 
     await context.test("重复组成员关系被拒绝", async () => {
-      const sql = `INSERT INTO "GroupMembership"
-        ("membershipId", "groupId", "userId", "membershipUpdatedAt")
+      const sql = `INSERT INTO "group_member"
+        ("id", "groupId", "userId", "joinedAt")
         VALUES ('duplicate', 'group', 'borrower', NOW())`;
-      await expectConstraint(client, sql, [], "23505", "GroupMembership_groupId_userId_key");
+      await expectConstraint(client, sql, [], "23505", "group_member_groupId_userId_key");
     });
 
     await context.test("重复物品组访问关联被拒绝", async () => {

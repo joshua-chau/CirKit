@@ -39,17 +39,17 @@ async function seedFixtures(database: PrismaClient) {
   });
   await database.group.createMany({
     data: [
-      { groupId: "group", groupName: "First group" },
-      { groupId: "group2", groupName: "Second group" },
-      { groupId: "unshared-group", groupName: "Unshared group" },
+      { id: "group", name: "First group" },
+      { id: "group2", name: "Second group" },
+      { id: "unshared-group", name: "Unshared group" },
     ],
   });
-  await database.groupMembership.createMany({
+  await database.groupMember.createMany({
     data: [
-      { groupId: "group", userId: "owner", membershipRole: "OWNER" },
+      { groupId: "group", userId: "owner", role: "OWNER" },
       { groupId: "group", userId: "borrower" },
       { groupId: "group", userId: "borrower2" },
-      { groupId: "group2", userId: "borrower2", membershipRole: "OWNER" },
+      { groupId: "group2", userId: "borrower2", role: "OWNER" },
       { groupId: "unshared-group", userId: "borrower" },
     ],
   });
@@ -1558,7 +1558,7 @@ test("Request Services with PostgreSQL", async (context) => {
         await testDatabase.item.update({ where: { itemId: "item" }, data: { itemArchivedAt: archivedAt } });
         // Simulate stale data from external group/access changes, not new group-management behavior.
         await testDatabase.itemAccess.deleteMany({ where: { itemId: "item", groupId: "group" } });
-        await testDatabase.groupMembership.deleteMany({ where: { groupId: "group", userId: "borrower" } });
+        await testDatabase.groupMember.deleteMany({ where: { groupId: "group", userId: "borrower" } });
 
         try {
           if (action === "cancel") {
@@ -1574,7 +1574,7 @@ test("Request Services with PostgreSQL", async (context) => {
           assert.deepEqual(item.itemArchivedAt, archivedAt);
         } finally {
           await testDatabase.itemAccess.create({ data: { itemId: "item", groupId: "group" } });
-          await testDatabase.groupMembership.create({ data: { groupId: "group", userId: "borrower" } });
+          await testDatabase.groupMember.create({ data: { groupId: "group", userId: "borrower" } });
         }
       }
     });
