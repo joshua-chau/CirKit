@@ -31,6 +31,12 @@ model User {
 
   sentInvitations GroupInvitation[]
 
+
+
+  groupMemberships GroupMember[]
+  sentInvitations GroupInvitation[]
+
+
   @@unique([email])
   @@map("user")
 }
@@ -88,8 +94,6 @@ enum GroupRole {
   OWNER
   MEMBER
 }
-
-
 enum InvitationStatus {
   PENDING
   ACCEPTED
@@ -98,143 +102,41 @@ enum InvitationStatus {
   EXPIRED
 }
 
-// Item status
-enum ItemStatus {
-  AVAILABLE
-  BORROWED
-}
-
-// Request status Version 1: No confirmation that the item is actually being transfered
-enum RequestStatus {
-  PENDING
-  APPROVED
-  DECLINED
-  CANCELLED
-  COMPLETED
-}
-
 model Group {
-
-  id          String   @id @default(cuid())
+  id          String            @id @default(cuid())
   name        String
-  // 新增可选的组描述。
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-
-  members      GroupMember[]
-
-  invitations  GroupInvitation[]
-
-  itemAccesses ItemAccess[]
-  requests     Request[]
-
-
-  @@map("group")
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  members     GroupMember[]
+  invitations GroupInvitation[]
+  @@map("group")   // "group" is an SQL keyword; Prisma quotes it, but raw SQL must too
 }
-
 
 model GroupMember {
-
   id       String    @id @default(cuid())
   groupId  String
   userId   String
   role     GroupRole @default(MEMBER)
-
   joinedAt DateTime  @default(now())
-
-
-  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-
+  group    Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@unique([groupId, userId])
   @@index([userId])
-
   @@map("group_member")
 }
-
 
 model GroupInvitation {
   id          String           @id @default(cuid())
   groupId     String
   email       String
   invitedById String
-
   token       String           @unique
   status      InvitationStatus @default(PENDING)
   expiresAt   DateTime
   createdAt   DateTime         @default(now())
-
-
-  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  invitedBy User  @relation(fields: [invitedById], references: [id])
-
+  group       Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  invitedBy   User             @relation(fields: [invitedById], references: [id])
   @@index([email])
   @@map("group_invitation")
-}
-
-/// User's item
-model Item {
-  itemId          String     @id @default(cuid())
-  ownerId         String
-  itemName        String
-  itemDescription String
-  itemCategory    String
-  itemCondition   String
-  itemStatus      ItemStatus @default(AVAILABLE)
-
-  itemArchivedAt DateTime?
-  itemCreatedAt  DateTime  @default(now())
-  itemUpdatedAt  DateTime  @updatedAt
-
-  owner        User         @relation("ItemOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  itemAccesses ItemAccess[]
-  requests     Request[]
-
-
-  @@index([ownerId])
-}
-
-/// A item can be opened to many groups; revoke it's access to a certain group does not erase it's history
-model ItemAccess {
-  itemAccessId        String   @id @default(cuid())
-  itemId              String
-  groupId             String
-  itemAccessCreatedAt DateTime @default(now())
-
-  item  Item  @relation(fields: [itemId], references: [itemId], onDelete: Restrict)
-
-  group Group @relation(fields: [groupId], references: [id], onDelete: Restrict)
-
-  @@unique([itemId, groupId])
-  @@index([groupId])
-}
-
-/// Approved = Item Borrowed Returned = Item AVAILABLE
-model Request {
-  requestId  String @id @default(cuid())
-  itemId     String
-  borrowerId String
-
-  groupId String
-
-  // PostgreSQL DATE
-  requestStartDate DateTime      @db.Date
-  requestEndDate   DateTime      @db.Date
-  requestStatus    RequestStatus @default(PENDING)
-  requestCreatedAt DateTime      @default(now())
-  requestUpdatedAt DateTime      @updatedAt
-
-  requestCompletedAt DateTime?
-
-  item     Item  @relation(fields: [itemId], references: [itemId], onDelete: Restrict)
-  borrower User  @relation("RequestBorrower", fields: [borrowerId], references: [id], onDelete: Restrict)
-
-  group    Group @relation(fields: [groupId], references: [id], onDelete: Restrict)
-
-  @@index([itemId, requestStatus])
-  @@index([borrowerId, requestCreatedAt])
-  @@index([groupId, requestStatus])
 }
