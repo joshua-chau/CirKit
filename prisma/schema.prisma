@@ -17,11 +17,17 @@ model User {
   name          String
   email         String
   emailVerified Boolean   @default(false)
-  image         String?
+  image         String`?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   sessions      Session[]
   accounts      Account[]
+
+
+
+  groupMemberships GroupMember[]
+  sentInvitations GroupInvitation[]
+
 
   @@unique([email])
   @@map("user")
@@ -73,4 +79,47 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+
+enum GroupRole { OWNER MEMBER }
+enum InvitationStatus { PENDING ACCEPTED DECLINED REVOKED EXPIRED }
+
+model Group {
+  id          String            @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  members     GroupMember[]
+  invitations GroupInvitation[]
+  @@map("group")   // "group" is an SQL keyword; Prisma quotes it, but raw SQL must too
+}
+
+model GroupMember {
+  id       String    @id @default(cuid())
+  groupId  String
+  userId   String
+  role     GroupRole @default(MEMBER)
+  joinedAt DateTime  @default(now())
+  group    Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([groupId, userId])
+  @@index([userId`])
+  @@map("group_member")
+}
+
+model GroupInvitation {
+  id          String           @id @default(cuid())
+  groupId     String
+  email       String
+  invitedById String
+  token       String           @unique
+  status      InvitationStatus @default(PENDING)
+  expiresAt   DateTime
+  createdAt   DateTime         @default(now())
+  group       Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  invitedBy   User             @relation(fields: [invitedById], references: [id])
+  @@index([email])
+  @@map("group_invitation")
 }
