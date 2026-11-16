@@ -171,12 +171,18 @@ export async function createRequest(
  * currentUserId must come from authentication, not a client-supplied user ID.
  * Item archiving or access revocation does not remove request history.
  */
-export async function getMyRequests(
-  currentUserId: string,
-): Promise<RequestRecord[]> {
+export async function getMyRequests(currentUserId: string) {
   const requests = await prisma.request.findMany({
     where: {
       borrowerId: currentUserId,
+    },
+    include: {
+      item: {
+        select: { itemName: true },
+      },
+      group: {
+        select: { name: true },
+      },
     },
     orderBy: [
       {

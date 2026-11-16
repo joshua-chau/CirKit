@@ -71,3 +71,9 @@ export interface RequestResponse {
   // Completion timestamp in ISO 8601 format, or null before Return.
   requestCompletedAt: string | null;
 }
+
+/** Adds display names to records returned by the borrower's list endpoint. */
+export interface BorrowingItemResponse extends RequestResponse {
+  itemName: string;
+  groupName: string;
+}
