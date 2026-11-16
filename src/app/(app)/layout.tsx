@@ -17,9 +17,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex flex-1 flex-col">
       <header className="border-b">
         <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-4 px-4">
-          <Link href={DEFAULT_LOGIN_REDIRECT} className="font-semibold">
-            CirKit
-          </Link>
+          <nav className="flex items-center gap-5">
+            <Link href={DEFAULT_LOGIN_REDIRECT} className="font-semibold">
+              CirKit
+            </Link>
+            <Link href="/groups" className="text-sm text-muted-foreground hover:text-foreground">
+              Groups
+            </Link>
+          </nav>
           <Suspense fallback={<div className="h-8 w-40 animate-pulse rounded-lg bg-muted" />}>
             <UserMenu />
           </Suspense>
