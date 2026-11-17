@@ -50,7 +50,6 @@ export async function getGroupDetail(groupId: string, userId: string) {
           user: { select: { id: true, name: true, email: true, image: true } },
         },
       },
-      _count: { select: { itemAccesses: { where: { item: { itemArchivedAt: null } } } } },
     },
   });
   if (!group) throw new NotFoundError("Group not found.");
@@ -60,7 +59,6 @@ export async function getGroupDetail(groupId: string, userId: string) {
     name: group.name,
     description: group.description,
     createdAt: group.createdAt,
-    sharedItemCount: group._count.itemAccesses,
     members: group.members.map((m) => ({ ...m.user, role: m.role, joinedAt: m.joinedAt })),
     viewer: {
       userId,

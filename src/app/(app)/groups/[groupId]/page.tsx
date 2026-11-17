@@ -7,11 +7,12 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/server/auth/session";
 import { NotFoundError } from "@/server/errors";
-import { inviteMemberAction, leaveGroupAction } from "@/server/groups/group.actions";
-import { getSharedItemsForGroup } from "@/server/groups/group-items";
+import { inviteMemberAction, leaveGroupAction, listItemInGroupAction } from "@/server/groups/group.actions";
+import { getListableItems, getSharedItemsForGroup } from "@/server/groups/group-items";
 import { getGroupDetail, getPendingGroupInvitations } from "@/server/groups/group.queries";
 import { ActionButton } from "../_components/action-button";
 import { InviteForm } from "../_components/invite-form";
+import { ListItemForm } from "../_components/list-item-form";
 import { PendingInvitations } from "../_components/pending-invitations";
 import { SharedItemList } from "../_components/shared-item-list";
 
@@ -45,6 +46,7 @@ async function GroupContent({ params }: Props) {
     group.viewer.canInvite ? getPendingGroupInvitations(groupId, user.id) : [],
     getSharedItemsForGroup(groupId, user.id),
   ]);
+  const listable = await getListableItems(user.id, items);
   const { viewer } = group;
 
   return (
@@ -84,13 +86,20 @@ async function GroupContent({ params }: Props) {
         <CardHeader>
           <CardTitle>Shared items</CardTitle>
           <CardDescription>
-            {group.sharedItemCount === 0
+            {items.length === 0
               ? "No items are shared with this group yet."
-              : `${group.sharedItemCount} ${group.sharedItemCount === 1 ? "item is" : "items are"} shared with this group.`}
+              : `${items.length} ${items.length === 1 ? "item is" : "items are"} shared with this group.`}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <SharedItemList items={items} viewerId={viewer.userId} />
+        <CardContent className="grid gap-4">
+          <SharedItemList groupId={group.id} items={items} viewerId={viewer.userId} />
+          <div className={items.length > 0 ? "border-t pt-4" : undefined}>
+            <ListItemForm
+              action={listItemInGroupAction.bind(null, group.id)}
+              items={listable.items}
+              hasItems={listable.hasItems}
+            />
+          </div>
         </CardContent>
       </Card>
 

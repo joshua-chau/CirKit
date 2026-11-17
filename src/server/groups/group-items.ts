@@ -1,50 +1,61 @@
 import "server-only";
 
-import type { Item } from "@/generated/prisma/client";
+import prisma from "@/lib/prisma";
+import { getItemsByGroupId, getMyItems } from "@/lib/items/item-service";
 import { requireGroupMember } from "./group.permissions";
 
 /**
- * SKELETON — the group page's link to the items module.
- *
- * The group page only displays items; the items module owns the query.
- * This file is the single place where the two meet, so wiring it up later
- * is a change to this file only.
- *
- * Needed from the items module (src/lib/items/item-service.ts):
- *
- *   getGroupItems(groupId: string): Promise<GroupItemSummary[]>
- *     - items that have an ItemAccess row for `groupId`
- *     - excluding archived items (itemArchivedAt = null)
- *     - each with its owner's { id, name, image }
- *     - newest first (itemCreatedAt desc, itemId desc — same as getMyItems)
- *     - membership is checked here before the call, so it needs no user id
- *
- * Needed later for the buttons on each row (not used by this file yet):
- *   - shareItemWithGroup(currentUserId, itemId, groupId) / unshareItemFromGroup(...)
- *     to create/delete the ItemAccess row ("Share one of my items" button)
- *   - createRequest(...) already exists in src/lib/requests/request-service.ts
- *     ("Request to borrow" button)
+ * The group page's link to the items module. The items module owns the
+ * item queries and rules; this file only adapts them for the group page.
  */
+
+type ServiceItem = Awaited<ReturnType<typeof getItemsByGroupId>>[number];
+
 export type GroupItemSummary = Pick<
-  Item,
+  ServiceItem,
   "itemId" | "itemName" | "itemDescription" | "itemCategory" | "itemCondition" | "itemStatus"
 > & {
   owner: { id: string; name: string; image: string | null };
 };
 
 /**
- * Items shared with a group, for its members. Throws NotFoundError for
- * non-members. Returns `null` while the items module's function doesn't
- * exist yet, so the page can say "not connected" instead of "no items".
+ * Items shared with a group, for its members, newest first. Throws
+ * NotFoundError for non-members (so the page can 404).
  */
-export async function getSharedItemsForGroup(
-  groupId: string,
-  userId: string,
-): Promise<GroupItemSummary[] | null> {
+export async function getSharedItemsForGroup(groupId: string, userId: string): Promise<GroupItemSummary[]> {
   await requireGroupMember(groupId, userId);
+  const items = await getItemsByGroupId(userId, groupId);
 
-  // TODO(items): replace the line below with
-  //   return getGroupItems(groupId);
-  // imported from "@/lib/items/item-service".
-  return null;
+  // getItemsByGroupId returns ownerId only; look up the owners' names here.
+  // An owner may no longer be a member, so don't rely on the member list.
+  const ownerIds = [...new Set(items.map((item) => item.ownerId))];
+  const owners = await prisma.user.findMany({
+    where: { id: { in: ownerIds } },
+    select: { id: true, name: true, image: true },
+  });
+  const ownerById = new Map(owners.map((owner) => [owner.id, owner]));
+
+  return items.map((item) => ({
+    itemId: item.itemId,
+    itemName: item.itemName,
+    itemDescription: item.itemDescription,
+    itemCategory: item.itemCategory,
+    itemCondition: item.itemCondition,
+    itemStatus: item.itemStatus,
+    owner: ownerById.get(item.ownerId) ?? { id: item.ownerId, name: "Unknown", image: null },
+  }));
 }
+
+/** The viewer's active items that aren't listed in this group yet. */
+export async function getListableItems(userId: string, sharedItems: GroupItemSummary[]) {
+  const listed = new Set(sharedItems.map((item) => item.itemId));
+  const mine = await getMyItems(userId);
+  return {
+    hasItems: mine.length > 0,
+    items: mine
+      .filter((item) => !listed.has(item.itemId))
+      .map((item) => ({ itemId: item.itemId, itemName: item.itemName })),
+  };
+}
+
+export type ListableItem = Awaited<ReturnType<typeof getListableItems>>["items"][number];

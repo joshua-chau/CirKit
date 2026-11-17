@@ -6,6 +6,8 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { ItemError } from "@/lib/items/item-errors";
+import { createItemAccess, deleteItemAccess } from "@/lib/items/item-service";
 import { groupInputSchema, inviteInputSchema } from "@/lib/validation/group.schema";
 import { toFieldErrors, type FieldErrors } from "@/lib/validation/auth.schema";
 import { requireUser } from "@/server/auth/session";
@@ -149,4 +151,41 @@ export async function declineInvitationAction(token: string): Promise<ActionResu
   const result = await run(() => declineInvitation(token, user));
   if (!result.ok) return result;
   redirect("/groups");
+}
+
+// ---------------------------------------------------------------- items
+// Listing rules (owner only, member only, not archived) live in the items
+// module; these actions only translate its errors for the group page.
+
+async function runItem(fn: () => Promise<unknown>): Promise<ActionResult> {
+  try {
+    await fn();
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof ItemError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+export async function listItemInGroupAction(
+  groupId: string,
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  const itemId = id.safeParse(formData.get("itemId"));
+  if (!id.safeParse(groupId).success || !itemId.success) {
+    return { ok: false, error: "Choose an item to list." };
+  }
+  const result = await runItem(() => createItemAccess(user.id, itemId.data, groupId));
+  if (result.ok) refresh();
+  return result;
+}
+
+export async function unlistItemFromGroupAction(groupId: string, itemId: string): Promise<ActionResult> {
+  const user = await requireUser();
+  if (!id.safeParse(groupId).success || !id.safeParse(itemId).success) return invalid();
+  const result = await runItem(() => deleteItemAccess(user.id, itemId, groupId));
+  if (result.ok) refresh();
+  return result;
 }
