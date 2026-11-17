@@ -12,7 +12,8 @@ import {
 import { validateImage } from "@/lib/image-validation";
 
 export interface UploadImageInput {
-  owner: {
+  /** The resource this image belongs to, used to build its R2 object key. */
+  source: {
     kind: "users" | "groups" | "items";
     id: string;
   };
@@ -97,19 +98,19 @@ function validateObjectKey(objectKey: string): void {
  * permissions before uploading and save the returned objectKey in the database.
  */
 export async function uploadImage(
-  { owner, file }: UploadImageInput,
+  { source, file }: UploadImageInput,
 ): Promise<{ objectKey: string }> {
   if (
-    !["users", "groups", "items"].includes(owner.kind) ||
-    typeof owner.id !== "string" ||
-    owner.id.trim().length === 0
+    !["users", "groups", "items"].includes(source.kind) ||
+    typeof source.id !== "string" ||
+    source.id.trim().length === 0
   ) {
-    throw new StorageError("INVALID_INPUT", "Provide a supported owner kind and resource ID.");
+    throw new StorageError("INVALID_INPUT", "Provide a supported source kind and resource ID.");
   }
 
   const image = await validateImage(file);
-  const ownerId = encodeURIComponent(owner.id).replace(/\./g, "%2E");
-  const objectKey = `${owner.kind}/${ownerId}/${randomUUID()}.${image.extension}`;
+  const sourceId = encodeURIComponent(source.id).replace(/\./g, "%2E");
+  const objectKey = `${source.kind}/${sourceId}/${randomUUID()}.${image.extension}`;
   validateObjectKey(objectKey);
 
   const { client, bucket } = getStorage();
