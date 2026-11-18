@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { Item } from "@/generated/prisma/client";
 import { Button } from "@/components/ui/button";
 
@@ -67,6 +68,12 @@ export default function MyItemsPage() {
         <p className="mt-2 text-muted-foreground">
           Your items and their current availability.
         </p>
+        <Link
+          href="/myitems/new"
+          className="mt-4 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          Add Item
+        </Link>
       </header>
 
       <section aria-label="Your items" aria-busy={loading}>
@@ -94,7 +101,14 @@ export default function MyItemsPage() {
             <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {items.map(item => (
                 <li key={item.itemId} className="min-w-0 rounded-xl border bg-card p-5 text-card-foreground">
-                  <h2 className="break-words text-lg font-semibold">{item.itemName}</h2>
+                  <h2 className="break-words text-lg font-semibold">
+                    <Link
+                      href={`/myitems/${encodeURIComponent(item.itemId)}`}
+                      className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                    >
+                      {item.itemName}
+                    </Link>
+                  </h2>
                   <dl className="mt-4 space-y-3 text-sm">
                     <div>
                       <dt className="text-muted-foreground">Category</dt>
