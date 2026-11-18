@@ -49,7 +49,10 @@ export function InviteForm({ action }: Props) {
 
       {state?.ok && state.data ? (
         <div className="grid gap-1 rounded-lg bg-muted p-3 text-sm">
-          <p>Invitation created. Send them this link (it expires in 7 days):</p>
+          <p>
+            Invitation sent. If they have a CirKit account with this email, it&apos;s waiting on
+            their Groups page. Otherwise, send them this link (it expires in 7 days):
+          </p>
           <CopyLinkButton path={state.data.invitePath} />
         </div>
       ) : null}

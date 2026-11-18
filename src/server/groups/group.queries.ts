@@ -4,7 +4,10 @@ import prisma from "@/lib/prisma";
 import { NotFoundError } from "@/server/errors";
 import { canInvite, canManageGroup, requireGroupMember } from "./group.permissions";
 
-/** Groups the user belongs to, newest membership first. */
+/**
+ * Groups the user belongs to, newest membership first. Used by the groups
+ * page, the dashboard sidebar, and GET /api/groups.
+ */
 export async function getUserGroups(userId: string) {
   const memberships = await prisma.groupMember.findMany({
     where: { userId },
@@ -12,7 +15,7 @@ export async function getUserGroups(userId: string) {
     select: {
       role: true,
       group: {
-        select: { id: true, name: true, description: true, _count: { select: { members: true } } },
+        select: { id: true, name: true, description: true, image: true, _count: { select: { members: true } } },
       },
     },
   });
@@ -20,6 +23,7 @@ export async function getUserGroups(userId: string) {
     id: group.id,
     name: group.name,
     description: group.description,
+    image: group.image,
     memberCount: group._count.members,
     role,
   }));
@@ -40,6 +44,7 @@ export async function getGroupDetail(groupId: string, userId: string) {
       id: true,
       name: true,
       description: true,
+      image: true,
       createdAt: true,
       members: {
         // Owner first, then by join date.
@@ -58,6 +63,7 @@ export async function getGroupDetail(groupId: string, userId: string) {
     id: group.id,
     name: group.name,
     description: group.description,
+    image: group.image,
     createdAt: group.createdAt,
     members: group.members.map((m) => ({ ...m.user, role: m.role, joinedAt: m.joinedAt })),
     viewer: {
@@ -92,19 +98,30 @@ export async function getPendingGroupInvitations(groupId: string, userId: string
 
 export type PendingGroupInvitation = Awaited<ReturnType<typeof getPendingGroupInvitations>>[number];
 
-/** Pending invitations addressed to an email (for the future dashboard). */
+/**
+ * The signed-in user's invitation inbox: pending, unexpired invitations sent
+ * to their email. Pass the session user's email, never one from the client.
+ * The token is what accept/decline take; it's safe to show to the invitee.
+ */
 export async function getPendingInvitationsForEmail(email: string) {
   return prisma.groupInvitation.findMany({
-    where: { email: email.toLowerCase(), status: "PENDING", expiresAt: { gt: new Date() } },
+    where: {
+      email: { equals: email, mode: "insensitive" },
+      status: "PENDING",
+      expiresAt: { gt: new Date() },
+    },
     orderBy: { createdAt: "desc" },
     select: {
       token: true,
+      createdAt: true,
       expiresAt: true,
-      group: { select: { id: true, name: true } },
+      group: { select: { id: true, name: true, image: true, _count: { select: { members: true } } } },
       invitedBy: { select: { name: true } },
     },
   });
 }
+
+export type InboxInvitation = Awaited<ReturnType<typeof getPendingInvitationsForEmail>>[number];
 
 /**
  * Invitation shown on /invites/[token]. Anyone with the link may see the

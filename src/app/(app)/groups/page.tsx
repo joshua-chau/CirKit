@@ -5,8 +5,9 @@ import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/server/auth/session";
 import { createGroupAction } from "@/server/groups/group.actions";
-import { getUserGroups } from "@/server/groups/group.queries";
+import { getPendingInvitationsForEmail, getUserGroups } from "@/server/groups/group.queries";
 import { GroupForm } from "./_components/group-form";
+import { InvitationInbox } from "./_components/invitation-inbox";
 
 export const metadata: Metadata = { title: "Groups · CirKit" };
 
@@ -14,6 +15,9 @@ export default function GroupsPage() {
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
       <section className="grid content-start gap-4">
+        <Suspense fallback={null}>
+          <Inbox />
+        </Suspense>
         <h1 className="text-2xl font-semibold">Your groups</h1>
         <Suspense fallback={<div className="h-32 animate-pulse rounded-xl bg-muted" />}>
           <GroupList />
@@ -33,6 +37,12 @@ export default function GroupsPage() {
   );
 }
 
+async function Inbox() {
+  const user = await requireUser();
+  const invitations = await getPendingInvitationsForEmail(user.email);
+  return <InvitationInbox invitations={invitations} />;
+}
+
 async function GroupList() {
   const user = await requireUser();
   const groups = await getUserGroups(user.id);
@@ -40,7 +50,7 @@ async function GroupList() {
   if (groups.length === 0) {
     return (
       <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
-        You&apos;re not in any groups yet. Create one, or ask a member for an invite link.
+        You&apos;re not in any groups yet. Create one, or ask a member to invite your email. Invitations show up here.
       </p>
     );
   }
