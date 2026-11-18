@@ -2,6 +2,7 @@ import "server-only";
 
 import prisma from "@/lib/prisma";
 import { getItemsByGroupId, getMyItems } from "@/lib/items/item-service";
+import { getMyRequests } from "@/lib/requests/request-service";
 import { requireGroupMember } from "./group.permissions";
 
 /**
@@ -16,6 +17,8 @@ export type GroupItemSummary = Pick<
   "itemId" | "itemName" | "itemDescription" | "itemCategory" | "itemCondition" | "itemStatus"
 > & {
   owner: { id: string; name: string; image: string | null };
+  /** The viewer's open request for this item in this group, if any. */
+  myRequestStatus: "PENDING" | "APPROVED" | null;
 };
 
 /**
@@ -24,7 +27,20 @@ export type GroupItemSummary = Pick<
  */
 export async function getSharedItemsForGroup(groupId: string, userId: string): Promise<GroupItemSummary[]> {
   await requireGroupMember(groupId, userId);
-  const items = await getItemsByGroupId(userId, groupId);
+  const [items, myRequests] = await Promise.all([
+    getItemsByGroupId(userId, groupId),
+    getMyRequests(userId),
+  ]);
+
+  // The viewer's open requests made through this group, by item.
+  const openRequest = new Map<string, "PENDING" | "APPROVED">();
+  for (const request of myRequests) {
+    if (request.groupId !== groupId) continue;
+    const status = request.requestStatus;
+    if (status === "APPROVED" || (status === "PENDING" && !openRequest.has(request.itemId))) {
+      openRequest.set(request.itemId, status);
+    }
+  }
 
   // getItemsByGroupId returns ownerId only; look up the owners' names here.
   // An owner may no longer be a member, so don't rely on the member list.
@@ -43,6 +59,7 @@ export async function getSharedItemsForGroup(groupId: string, userId: string): P
     itemCondition: item.itemCondition,
     itemStatus: item.itemStatus,
     owner: ownerById.get(item.ownerId) ?? { id: item.ownerId, name: "Unknown", image: null },
+    myRequestStatus: openRequest.get(item.itemId) ?? null,
   }));
 }
 

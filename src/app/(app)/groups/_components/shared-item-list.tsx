@@ -1,6 +1,7 @@
 import type { GroupItemSummary } from "@/server/groups/group-items";
-import { unlistItemFromGroupAction } from "@/server/groups/group.actions";
+import { requestItemAction, unlistItemFromGroupAction } from "@/server/groups/group.actions";
 import { ActionButton } from "./action-button";
+import { RequestItemButton } from "./request-item-button";
 
 type Props = {
   groupId: string;
@@ -21,7 +22,7 @@ export function SharedItemList({ groupId, items, viewerId }: Props) {
       {items.map((item) => {
         const mine = item.owner.id === viewerId;
         return (
-          <li key={item.itemId} className="flex items-start justify-between gap-3 py-3">
+          <li key={item.itemId} className="flex flex-wrap items-start justify-between gap-3 py-3">
             <div className="min-w-0">
               <p className="truncate font-medium">{item.itemName}</p>
               <p className="truncate text-xs text-muted-foreground">
@@ -31,7 +32,7 @@ export function SharedItemList({ groupId, items, viewerId }: Props) {
                 <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{item.itemDescription}</p>
               ) : null}
             </div>
-            <div className="flex shrink-0 items-start gap-2">
+            <div className="flex flex-wrap items-start justify-end gap-2">
               <span
                 className={
                   item.itemStatus === "AVAILABLE"
@@ -51,7 +52,17 @@ export function SharedItemList({ groupId, items, viewerId }: Props) {
                   Unlist
                 </ActionButton>
               ) : null}
-              {/* TODO(requests): "Request to borrow" button (createRequest) for other people's available items. */}
+              {!mine && item.myRequestStatus ? (
+                <span className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+                  {item.myRequestStatus === "APPROVED" ? "Approved for you" : "Requested"}
+                </span>
+              ) : null}
+              {!mine && !item.myRequestStatus && item.itemStatus === "AVAILABLE" ? (
+                <RequestItemButton
+                  action={requestItemAction.bind(null, groupId, item.itemId)}
+                  itemName={item.itemName}
+                />
+              ) : null}
             </div>
           </li>
         );
