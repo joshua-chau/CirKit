@@ -183,6 +183,7 @@ model Item {
   itemDescription String
   itemCategory    String
   itemCondition   String
+  itemImageKey    String?
   itemStatus      ItemStatus @default(AVAILABLE)
 
   itemArchivedAt DateTime?

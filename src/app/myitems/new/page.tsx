@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { CreateItemInput } from "@/lib/items/item-validation";
+import { ItemImagePicker, uploadItemPhoto } from "@/components/items/item-image-picker";
 
 type CreateItemResponse = {
   data?: { itemId: string };
@@ -22,6 +23,8 @@ export default function AddItemPage() {
   const submitting = useRef(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [createdItemId, setCreatedItemId] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,7 +37,7 @@ export default function AddItemPage() {
       itemCondition: String(formData.get("itemCondition") ?? "").trim(),
       itemDescription: String(formData.get("itemDescription") ?? "").trim(),
     };
-    if (Object.values(input).some(value => value.length === 0)) {
+    if (!createdItemId && Object.values(input).some(value => value.length === 0)) {
       setError("Complete all four fields. Fields cannot contain only spaces.");
       return;
     }
@@ -42,6 +45,11 @@ export default function AddItemPage() {
     submitting.current = true;
     setPending(true);
     try {
+      if (createdItemId) {
+        if (photo) await uploadItemPhoto(createdItemId, photo);
+        router.push(`/myitems/${encodeURIComponent(createdItemId)}`);
+        return;
+      }
       const response = await fetch("/api/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -51,6 +59,14 @@ export default function AddItemPage() {
       const result: CreateItemResponse = await response.json();
       if (!response.ok) throw new Error(result.error?.message ?? "Unable to add your item.");
       if (!result.data?.itemId) throw new Error("The server returned an unexpected response.");
+      setCreatedItemId(result.data.itemId);
+      if (photo) {
+        try {
+          await uploadItemPhoto(result.data.itemId, photo);
+        } catch (error) {
+          throw new Error(`Your item was saved, but its photo was not uploaded. ${error instanceof Error ? error.message : "Please retry."}`);
+        }
+      }
       router.push(`/myitems/${encodeURIComponent(result.data.itemId)}`);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to add your item.");
@@ -67,7 +83,7 @@ export default function AddItemPage() {
         <p className="mt-2 text-muted-foreground">Describe your item. All four fields are required.</p>
       </header>
       <form onSubmit={handleSubmit} aria-busy={pending} aria-describedby={error ? "item-form-error" : undefined} className="rounded-xl border bg-card p-6 sm:p-8">
-        <fieldset disabled={pending} className="space-y-6">
+        <fieldset disabled={pending || createdItemId !== null} className="space-y-6">
           <legend className="sr-only">Item details</legend>
           <div className="space-y-2">
             <Label htmlFor="itemName">Name</Label>
@@ -97,9 +113,11 @@ export default function AddItemPage() {
           </div>
           <p className="text-sm text-muted-foreground">New items are automatically marked as Available.</p>
         </fieldset>
+        <div className="mt-6"><ItemImagePicker file={photo} onChange={setPhoto} disabled={pending} /></div>
+        {createdItemId && <p role="status" className="mt-4 text-sm">Your item is saved. Select a photo and retry, or clear the selection to continue without one.</p>}
         {error && <p id="item-form-error" role="alert" className="mt-6 text-sm text-destructive">{error}</p>}
         <div className="mt-6 flex items-center gap-4">
-          <Button type="submit" disabled={pending}>{pending ? "Adding item..." : "Add Item"}</Button>
+          <Button type="submit" disabled={pending}>{pending ? "Saving..." : createdItemId ? "Continue" : "Add Item"}</Button>
           {!pending && <Link href="/myitems" className="text-sm underline underline-offset-4">Cancel</Link>}
         </div>
       </form>

@@ -1,14 +1,17 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import { ItemImagePicker, uploadItemPhoto } from "@/components/items/item-image-picker";
 import { useParams } from "next/navigation";
 import type { Item } from "@/generated/prisma/client";
 import { Button } from "@/components/ui/button";
+import { ItemRequests } from "@/components/items/item-requests";
 
 type ItemDetails = Pick<Item,
   "itemId" | "itemName" | "itemCategory" | "itemCondition" | "itemStatus" | "itemDescription"
->;
+> & { itemImageUrl: string | null };
 
 type ItemResponse = {
   data?: ItemDetails;
@@ -93,6 +96,7 @@ function ItemLoader({ itemId }: { itemId: string }) {
   return (
     <article className="mt-8 min-w-0 rounded-xl border bg-card p-6 text-card-foreground sm:p-8">
       <h1 className="break-words text-3xl font-semibold tracking-tight">{item.itemName}</h1>
+      <ItemPhotoEditor item={item} />
       <dl className="mt-6 grid gap-6 sm:grid-cols-3">
         <div>
           <dt className="text-sm text-muted-foreground">Category</dt>
@@ -115,6 +119,56 @@ function ItemLoader({ itemId }: { itemId: string }) {
         <h2 id="description-heading" className="text-lg font-semibold">Description</h2>
         <p className="mt-3 whitespace-pre-wrap break-words leading-relaxed">{item.itemDescription}</p>
       </section>
+      <ItemRequests itemId={item.itemId} />
     </article>
+  );
+}
+
+function ItemPhotoEditor({ item }: { item: ItemDetails }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [imageUrl, setImageUrl] = useState(item.itemImageUrl);
+  const [version, setVersion] = useState(0);
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const busy = useRef(false);
+
+  async function save(remove: boolean) {
+    if (busy.current || (!remove && !file)) return;
+    busy.current = true;
+    setPending(true);
+    setMessage(null);
+    try {
+      if (remove) {
+        const response = await fetch(`/api/items/${encodeURIComponent(item.itemId)}/image`, { method: "DELETE" });
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(result.error?.message ?? "Unable to remove photo.");
+        }
+        setImageUrl(null);
+      } else {
+        const result = await uploadItemPhoto(item.itemId, file!);
+        setImageUrl(result.itemImageUrl);
+        setVersion(value => value + 1);
+      }
+      setFile(null);
+      setMessage(remove ? "Photo removed." : "Photo saved.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to save photo.");
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
+  }
+
+  return (
+    <section aria-label="Item photo" aria-busy={pending} className="mt-6 space-y-4">
+      {imageUrl && <Image key={version} src={`${imageUrl}?v=${version}`} alt={item.itemName} width={640} height={480} unoptimized className="max-h-80 w-auto rounded-lg object-contain" />}
+      <ItemImagePicker file={file} onChange={setFile} disabled={pending} />
+      <div className="flex gap-3">
+        <Button disabled={pending || !file} onClick={() => void save(false)}>{pending ? "Saving..." : imageUrl ? "Replace photo" : "Upload photo"}</Button>
+        {imageUrl && <Button variant="outline" disabled={pending} onClick={() => void save(true)}>Remove photo</Button>}
+      </div>
+      {message && <p role="status" className="text-sm">{message}</p>}
+    </section>
   );
 }

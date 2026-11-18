@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import type { Item } from "@/generated/prisma/client";
 import { Button } from "@/components/ui/button";
 
 type ItemSummary = Pick<
   Item,
   "itemId" | "itemName" | "itemCategory" | "itemCondition" | "itemStatus"
->;
+> & { itemImageUrl: string | null; activeRequestCount: number };
 
 type ItemsResponse = {
   data?: ItemSummary[];
@@ -60,6 +61,12 @@ export default function MyItemsPage() {
     setAttempt(value => value + 1);
   }
 
+  const isActive = (item: ItemSummary) => item.itemStatus === "BORROWED" || item.activeRequestCount > 0;
+  const sections = [
+    { title: "Active items", description: "Items with pending requests or currently lent out.", items: items.filter(isActive) },
+    { title: "Inactive items", description: "Available items with no pending or approved requests.", items: items.filter(item => !isActive(item)) },
+  ];
+
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
       <header className="mb-8">
@@ -94,21 +101,28 @@ export default function MyItemsPage() {
             </p>
           </div>
         ) : (
-          <>
+          <div className="space-y-10">
+          {sections.map(section => (
+          <section key={section.title} aria-label={section.title}>
+            <h2 className="text-2xl font-semibold">{section.title}</h2>
+            <p className="mt-2 text-sm text-muted-foreground">{section.description}</p>
             <p className="mb-4 text-sm text-muted-foreground">
-              {items.length} {items.length === 1 ? "item" : "items"}
+              {section.items.length} {section.items.length === 1 ? "item" : "items"}
             </p>
+            {section.items.length === 0 && <p className="rounded-xl border border-dashed p-6 text-muted-foreground">No {section.title.toLowerCase()}.</p>}
             <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {items.map(item => (
+              {section.items.map(item => (
                 <li key={item.itemId} className="min-w-0 rounded-xl border bg-card p-5 text-card-foreground">
-                  <h2 className="break-words text-lg font-semibold">
+                  {item.itemImageUrl && <Image src={item.itemImageUrl} alt={item.itemName} width={480} height={320} unoptimized className="mb-4 h-40 w-full rounded-lg object-contain" />}
+                  <h3 className="break-words text-lg font-semibold">
                     <Link
                       href={`/myitems/${encodeURIComponent(item.itemId)}`}
                       className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
                     >
                       {item.itemName}
                     </Link>
-                  </h2>
+                  </h3>
+                  {item.activeRequestCount > 0 && <p className="mt-2 text-sm text-muted-foreground">{item.activeRequestCount} active {item.activeRequestCount === 1 ? "request" : "requests"}</p>}
                   <dl className="mt-4 space-y-3 text-sm">
                     <div>
                       <dt className="text-muted-foreground">Category</dt>
@@ -130,7 +144,9 @@ export default function MyItemsPage() {
                 </li>
               ))}
             </ul>
-          </>
+          </section>
+          ))}
+          </div>
         )}
       </section>
     </main>
