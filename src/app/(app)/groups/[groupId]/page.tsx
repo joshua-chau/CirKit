@@ -4,13 +4,30 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { requireUser } from "@/server/auth/session";
 import { NotFoundError } from "@/server/errors";
-import { inviteMemberAction, leaveGroupAction, listItemInGroupAction } from "@/server/groups/group.actions";
-import { getListableItems, getSharedItemsForGroup } from "@/server/groups/group-items";
-import { getGroupDetail, getPendingGroupInvitations } from "@/server/groups/group.queries";
+import {
+  inviteMemberAction,
+  leaveGroupAction,
+  listItemInGroupAction,
+} from "@/server/groups/group.actions";
+import {
+  getListableItems,
+  getSharedItemsForGroup,
+} from "@/server/groups/group-items";
+import {
+  getGroupDetail,
+  getPendingGroupInvitations,
+} from "@/server/groups/group.queries";
 import { ActionButton } from "../_components/action-button";
+import { GroupAvatar } from "../_components/group-avatar";
 import { InviteForm } from "../_components/invite-form";
 import { ListItemForm } from "../_components/list-item-form";
 import { PendingInvitations } from "../_components/pending-invitations";
@@ -22,7 +39,9 @@ type Props = { params: Promise<{ groupId: string }> };
 
 export default function GroupPage({ params }: Props) {
   return (
-    <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense
+      fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}
+    >
       <GroupContent params={params} />
     </Suspense>
   );
@@ -53,12 +72,20 @@ async function GroupContent({ params }: Props) {
     <div className="grid gap-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="grid gap-1">
-          <Link href="/groups" className="text-sm text-muted-foreground hover:text-foreground">
+          <Link
+            href="/groups"
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
             ← All groups
           </Link>
-          <h1 className="text-2xl font-semibold">{group.name}</h1>
+          <div className="flex items-center gap-3">
+            <GroupAvatar src={group.image} name={group.name} size="md" />
+            <h1 className="text-2xl font-semibold">{group.name}</h1>
+          </div>
           {group.description ? (
-            <p className="max-w-2xl whitespace-pre-line text-muted-foreground">{group.description}</p>
+            <p className="max-w-2xl whitespace-pre-line text-muted-foreground">
+              {group.description}
+            </p>
           ) : null}
           <p className="text-xs text-muted-foreground">
             Created {dateFormat.format(group.createdAt)} · You are{" "}
@@ -67,7 +94,10 @@ async function GroupContent({ params }: Props) {
         </div>
         <div className="flex items-start gap-2">
           {viewer.canManage ? (
-            <Link href={`/groups/${group.id}/settings`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Link
+              href={`/groups/${group.id}/settings`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
               Settings
             </Link>
           ) : null}
@@ -92,7 +122,11 @@ async function GroupContent({ params }: Props) {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <SharedItemList groupId={group.id} items={items} viewerId={viewer.userId} />
+          <SharedItemList
+            groupId={group.id}
+            items={items}
+            viewerId={viewer.userId}
+          />
           <div className={items.length > 0 ? "border-t pt-4" : undefined}>
             <ListItemForm
               action={listItemInGroupAction.bind(null, group.id)}
@@ -110,15 +144,23 @@ async function GroupContent({ params }: Props) {
         <CardContent className="grid gap-6">
           <ul className="divide-y">
             {group.members.map((member) => (
-              <li key={member.id} className="flex items-center justify-between gap-3 py-2.5">
+              <li
+                key={member.id}
+                className="flex items-center justify-between gap-3 py-2.5"
+              >
                 <div className="min-w-0">
                   <p className="truncate font-medium">
                     {member.name}
                     {member.id === viewer.userId ? (
-                      <span className="font-normal text-muted-foreground"> (you)</span>
+                      <span className="font-normal text-muted-foreground">
+                        {" "}
+                        (you)
+                      </span>
                     ) : null}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">{member.email}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {member.email}
+                  </p>
                 </div>
                 <span
                   className={
@@ -136,7 +178,11 @@ async function GroupContent({ params }: Props) {
           {viewer.canInvite ? (
             <div className="grid gap-6 border-t pt-6">
               <InviteForm action={inviteMemberAction.bind(null, group.id)} />
-              <PendingInvitations groupId={group.id} invitations={invitations} viewer={viewer} />
+              <PendingInvitations
+                groupId={group.id}
+                invitations={invitations}
+                viewer={viewer}
+              />
             </div>
           ) : null}
         </CardContent>

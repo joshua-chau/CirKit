@@ -14,7 +14,14 @@ type ServiceItem = Awaited<ReturnType<typeof getItemsByGroupId>>[number];
 
 export type GroupItemSummary = Pick<
   ServiceItem,
-  "itemId" | "itemName" | "itemDescription" | "itemCategory" | "itemCondition" | "itemStatus"
+  | "itemId"
+  | "itemName"
+  | "itemDescription"
+  | "itemCategory"
+  | "itemCondition"
+  | "itemStatus"
+  // Same-origin /api/items/{id}/image (members only), or null if no picture.
+  | "itemImageUrl"
 > & {
   owner: { id: string; name: string; image: string | null };
   /** The viewer's open request for this item in this group, if any. */
@@ -58,6 +65,7 @@ export async function getSharedItemsForGroup(groupId: string, userId: string): P
     itemCategory: item.itemCategory,
     itemCondition: item.itemCondition,
     itemStatus: item.itemStatus,
+    itemImageUrl: item.itemImageUrl,
     owner: ownerById.get(item.ownerId) ?? { id: item.ownerId, name: "Unknown", image: null },
     myRequestStatus: openRequest.get(item.itemId) ?? null,
   }));
