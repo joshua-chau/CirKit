@@ -21,13 +21,14 @@ export default function MyItemsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [archived, setArchived] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
 
     async function loadItems() {
       try {
-        const response = await fetch("/api/items", {
+        const response = await fetch(`/api/items?archived=${archived}`, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -53,7 +54,7 @@ export default function MyItemsPage() {
 
     void loadItems();
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, archived]);
 
   function retry() {
     setError(null);
@@ -61,8 +62,18 @@ export default function MyItemsPage() {
     setAttempt(value => value + 1);
   }
 
+  function selectList(showArchived: boolean) {
+    if (showArchived === archived) return;
+    setItems([]);
+    setError(null);
+    setLoading(true);
+    setArchived(showArchived);
+  }
+
   const isActive = (item: ItemSummary) => item.itemStatus === "BORROWED" || item.activeRequestCount > 0;
-  const sections = [
+  const sections = archived ? [
+    { title: "Archived items", description: "Items hidden from current and group listings. Details and request history are retained.", items },
+  ] : [
     { title: "Active items", description: "Items with pending requests or currently lent out.", items: items.filter(isActive) },
     { title: "Inactive items", description: "Available items with no pending or approved requests.", items: items.filter(item => !isActive(item)) },
   ];
@@ -83,6 +94,11 @@ export default function MyItemsPage() {
         </Link>
       </header>
 
+      <div role="group" aria-label="Item lists" className="mb-6 flex gap-2">
+        <Button type="button" variant={archived ? "outline" : "default"} aria-pressed={!archived} onClick={() => selectList(false)}>Current</Button>
+        <Button type="button" variant={archived ? "default" : "outline"} aria-pressed={archived} onClick={() => selectList(true)}>Archived</Button>
+      </div>
+
       <section aria-label="Your items" aria-busy={loading}>
         {loading ? (
           <p role="status" className="rounded-xl border p-8 text-center text-muted-foreground">
@@ -95,9 +111,9 @@ export default function MyItemsPage() {
           </div>
         ) : items.length === 0 ? (
           <div className="rounded-xl border border-dashed p-12 text-center">
-            <h2 className="text-lg font-medium">No items yet</h2>
+            <h2 className="text-lg font-medium">{archived ? "No archived items" : "No items yet"}</h2>
             <p className="mt-2 text-muted-foreground">
-              Items you add will appear here.
+              {archived ? "Items you archive will appear here." : "Items you add will appear here."}
             </p>
           </div>
         ) : (
@@ -136,7 +152,7 @@ export default function MyItemsPage() {
                       <dt className="text-muted-foreground">Availability</dt>
                       <dd className="mt-1">
                         <span className="inline-flex rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
-                          {item.itemStatus === "AVAILABLE" ? "Available" : "Borrowed"}
+                          {archived ? "Archived" : item.itemStatus === "AVAILABLE" ? "Available" : "Borrowed"}
                         </span>
                       </dd>
                     </div>

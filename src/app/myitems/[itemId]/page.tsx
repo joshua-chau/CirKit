@@ -11,7 +11,7 @@ import { ItemRequests } from "@/components/items/item-requests";
 
 type ItemDetails = Pick<Item,
   "itemId" | "itemName" | "itemCategory" | "itemCondition" | "itemStatus" | "itemDescription"
-> & { itemImageUrl: string | null };
+> & { itemImageUrl: string | null; itemArchivedAt: string | null };
 
 type ItemResponse = {
   data?: ItemDetails;
@@ -96,6 +96,7 @@ function ItemLoader({ itemId }: { itemId: string }) {
   return (
     <article className="mt-8 min-w-0 rounded-xl border bg-card p-6 text-card-foreground sm:p-8">
       <h1 className="break-words text-3xl font-semibold tracking-tight">{item.itemName}</h1>
+      {item.itemArchivedAt && <p role="status" className="mt-3 rounded-lg bg-secondary p-3 text-sm">Archived. This item is hidden from current and group listings. Its details and request history are retained.</p>}
       <ItemPhotoEditor item={item} />
       <dl className="mt-6 grid gap-6 sm:grid-cols-3">
         <div>
@@ -110,7 +111,7 @@ function ItemLoader({ itemId }: { itemId: string }) {
           <dt className="text-sm text-muted-foreground">Availability</dt>
           <dd className="mt-1">
             <span className="inline-flex rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
-              {item.itemStatus === "AVAILABLE" ? "Available" : "Borrowed"}
+              {item.itemArchivedAt ? "Archived" : item.itemStatus === "AVAILABLE" ? "Available" : "Borrowed"}
             </span>
           </dd>
         </div>
@@ -119,8 +120,52 @@ function ItemLoader({ itemId }: { itemId: string }) {
         <h2 id="description-heading" className="text-lg font-semibold">Description</h2>
         <p className="mt-3 whitespace-pre-wrap break-words leading-relaxed">{item.itemDescription}</p>
       </section>
-      <ItemRequests itemId={item.itemId} />
+      <ItemRequests key={item.itemArchivedAt ?? "current"} itemId={item.itemId} />
+      {!item.itemArchivedAt && <ArchiveItem item={item} onArchived={setItem} />}
     </article>
+  );
+}
+
+function ArchiveItem({ item, onArchived }: { item: ItemDetails; onArchived: (item: ItemDetails) => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const busy = useRef(false);
+
+  async function archive() {
+    if (busy.current) return;
+    busy.current = true;
+    setPending(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/items/${encodeURIComponent(item.itemId)}/archive`, { method: "POST" });
+      const result: ItemResponse = await response.json();
+      if (!response.ok) throw new Error(result.error?.message ?? "Unable to archive this item.");
+      if (!result.data || result.data.itemId !== item.itemId || !result.data.itemArchivedAt) {
+        throw new Error("The server returned an unexpected response. Reload the item to check its archive status.");
+      }
+      onArchived(result.data);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to archive this item.");
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
+  }
+
+  return (
+    <section aria-label="Archive item" aria-busy={pending} className="mt-8 border-t pt-6">
+      <h2 className="text-lg font-semibold">Archive item</h2>
+      {item.itemStatus === "BORROWED" ? <p className="mt-3 text-sm text-muted-foreground">This item must be returned before you can archive it.</p>
+        : confirming ? <div role="group" aria-label="Confirm archiving" className="mt-3 space-y-4">
+          <p className="text-sm">Archive “{item.itemName}”? It will be hidden from current and group listings, and pending requests will be declined. Details and request history remain available. Archived items cannot currently be restored.</p>
+          <div className="flex gap-3">
+            <Button type="button" variant="destructive" disabled={pending} onClick={() => void archive()}>{pending ? "Archiving..." : "Confirm archive"}</Button>
+            <Button type="button" variant="outline" disabled={pending} onClick={() => { setConfirming(false); setError(null); }}>Cancel</Button>
+          </div>
+        </div> : <Button type="button" variant="outline" className="mt-3" onClick={() => setConfirming(true)}>Archive item</Button>}
+      {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
+    </section>
   );
 }
 
