@@ -24,7 +24,7 @@ type Props = { searchParams: Promise<{ password?: string }> };
 
 export default function ProfilePage({ searchParams }: Props) {
   return (
-    <div className="grid max-w-2xl gap-6">
+    <div className="mx-auto grid w-full max-w-2xl gap-6">
       <h1 className="text-2xl font-semibold">Your profile</h1>
       <Suspense
         fallback={<div className="h-96 animate-pulse rounded-xl bg-muted" />}
