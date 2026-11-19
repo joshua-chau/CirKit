@@ -20,14 +20,14 @@ type ItemResponse = {
 
 export default function ItemPage() {
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
+    <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
       <Link href="/myitems" className="text-sm underline underline-offset-4">
         Back to My Items
       </Link>
       <Suspense fallback={<LoadingItem />}>
         <ItemContent />
       </Suspense>
-    </main>
+    </div>
   );
 }
 

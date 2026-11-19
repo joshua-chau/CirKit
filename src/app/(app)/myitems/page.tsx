@@ -79,9 +79,8 @@ export default function MyItemsPage() {
   ];
 
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
+    <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
       <header className="mb-8">
-        <p className="mb-2 text-sm font-medium text-muted-foreground">CirKit</p>
         <h1 className="text-3xl font-semibold tracking-tight">My Items</h1>
         <p className="mt-2 text-muted-foreground">
           Your items and their current availability.
@@ -165,6 +164,6 @@ export default function MyItemsPage() {
           </div>
         )}
       </section>
-    </main>
+    </div>
   );
 }

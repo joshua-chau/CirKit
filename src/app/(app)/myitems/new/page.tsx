@@ -76,7 +76,7 @@ export default function AddItemPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
+    <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
       <Link href="/myitems" className="text-sm underline underline-offset-4">Back to My Items</Link>
       <header className="my-8">
         <h1 className="text-3xl font-semibold tracking-tight">Add Item</h1>
@@ -121,6 +121,6 @@ export default function AddItemPage() {
           {!pending && <Link href="/myitems" className="text-sm underline underline-offset-4">Cancel</Link>}
         </div>
       </form>
-    </main>
+    </div>
   );
 }
