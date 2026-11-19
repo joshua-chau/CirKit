@@ -21,7 +21,7 @@ import {
 import { getGroupDetail } from "@/server/groups/group.queries";
 import { ActionButton } from "../../_components/action-button";
 import { GroupForm } from "../../_components/group-form";
-import { GroupPictureEditor } from "../../_components/group-picture-editor";
+import { PictureEditor } from "@/components/picture-editor";
 
 export const metadata: Metadata = { title: "Group settings · CirKit" };
 
@@ -77,10 +77,11 @@ async function SettingsContent({ params }: Props) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <GroupPictureEditor
-            groupId={group.id}
-            groupName={group.name}
+          <PictureEditor
+            endpoint={`/api/groups/${encodeURIComponent(group.id)}/image`}
+            name={group.name}
             image={group.image}
+            removeConfirm="Remove the group picture?"
           />
         </CardContent>
       </Card>

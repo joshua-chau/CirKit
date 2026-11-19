@@ -4,7 +4,7 @@ import {
 } from "@/server/groups/group.actions";
 import type { InboxInvitation } from "@/server/groups/group.queries";
 import { ActionButton } from "./action-button";
-import { GroupAvatar } from "./group-avatar";
+import { Avatar } from "@/components/avatar";
 
 const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
 
@@ -28,7 +28,7 @@ export function InvitationInbox({
             className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/40 p-4"
           >
             <div className="flex min-w-0 items-center gap-3">
-              <GroupAvatar
+              <Avatar
                 src={invitation.group.image}
                 name={invitation.group.name}
                 size="sm"

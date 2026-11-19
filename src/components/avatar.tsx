@@ -4,15 +4,16 @@ import { useState } from "react";
 import Image from "next/image";
 
 const sizes = {
+  xs: "size-8 text-xs",
   sm: "size-10 text-sm",
   md: "size-12 text-base",
   lg: "size-20 text-2xl",
 } as const;
-const pixels = { sm: 40, md: 48, lg: 80 } as const;
+const pixels = { xs: 32, sm: 40, md: 48, lg: 80 } as const;
 
 type Props = { src: string | null; name: string; size?: keyof typeof sizes };
 
-/** Up to two initials: "Tool Library" → "TL", "climbing" → "C". */
+/** Up to two initials: "Tool Library" → "TL", "alice" → "A". */
 function initials(name: string) {
   const words = name.trim().split(/\s+/).filter(Boolean);
   return (
@@ -24,10 +25,10 @@ function initials(name: string) {
 }
 
 /**
- * Round group picture. Falls back to the group's initials when there is no
- * picture or it fails to load (e.g. storage unavailable).
+ * Round picture for a user or group. Falls back to initials when there is
+ * no picture or it fails to load (e.g. storage unavailable).
  */
-export function GroupAvatar({ src, name, size = "md" }: Props) {
+export function Avatar({ src, name, size = "md" }: Props) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const box = `${sizes[size]} shrink-0 overflow-hidden rounded-full border bg-muted`;
 

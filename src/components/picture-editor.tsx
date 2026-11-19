@@ -5,15 +5,24 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { GroupAvatar } from "./group-avatar";
+import { Avatar } from "@/components/avatar";
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
 const MAX_BYTES = 2 * 1024 * 1024;
 
-type Props = { groupId: string; groupName: string; image: string | null };
+type Props = {
+  /** API route that takes POST (multipart `image`) and DELETE. */
+  endpoint: string;
+  /** Used for the initials fallback. */
+  name: string;
+  /** Current picture URL, or null. */
+  image: string | null;
+  /** Confirmation text for removing, e.g. "Remove the group picture?". */
+  removeConfirm: string;
+};
 
-/** Owner-only picture controls: choose → preview → upload/replace, or remove. */
-export function GroupPictureEditor({ groupId, groupName, image }: Props) {
+/** Picture controls: choose → preview → upload/replace, or remove. */
+export function PictureEditor({ endpoint, name, image, removeConfirm }: Props) {
   const router = useRouter();
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -64,10 +73,7 @@ export function GroupPictureEditor({ groupId, groupName, image }: Props) {
         body = new FormData();
         body.set("image", file!);
       }
-      const response = await fetch(
-        `/api/groups/${encodeURIComponent(groupId)}/image`,
-        { method, body },
-      );
+      const response = await fetch(endpoint, { method, body });
       if (!response.ok) {
         const result = await response.json().catch(() => null);
         throw new Error(result?.error?.message ?? "Couldn't save the picture.");
@@ -104,7 +110,7 @@ export function GroupPictureEditor({ groupId, groupName, image }: Props) {
             />
           </div>
         ) : (
-          <GroupAvatar src={image} name={groupName} size="lg" />
+          <Avatar src={image} name={name} size="lg" />
         )}
         <div className="grid gap-1 text-sm">
           <p className="font-medium">
@@ -171,8 +177,7 @@ export function GroupPictureEditor({ groupId, groupName, image }: Props) {
             variant="ghost"
             disabled={pending}
             onClick={() => {
-              if (window.confirm("Remove the group picture?"))
-                void send("DELETE");
+              if (window.confirm(removeConfirm)) void send("DELETE");
             }}
           >
             {pending ? "Removing…" : "Remove picture"}

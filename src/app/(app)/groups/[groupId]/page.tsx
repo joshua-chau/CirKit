@@ -27,7 +27,7 @@ import {
   getPendingGroupInvitations,
 } from "@/server/groups/group.queries";
 import { ActionButton } from "../_components/action-button";
-import { GroupAvatar } from "../_components/group-avatar";
+import { Avatar } from "@/components/avatar";
 import { InviteForm } from "../_components/invite-form";
 import { ListItemForm } from "../_components/list-item-form";
 import { PendingInvitations } from "../_components/pending-invitations";
@@ -79,7 +79,7 @@ async function GroupContent({ params }: Props) {
             ← All groups
           </Link>
           <div className="flex items-center gap-3">
-            <GroupAvatar src={group.image} name={group.name} size="md" />
+            <Avatar src={group.image} name={group.name} size="md" />
             <h1 className="text-2xl font-semibold">{group.name}</h1>
           </div>
           {group.description ? (
@@ -148,19 +148,22 @@ async function GroupContent({ params }: Props) {
                 key={member.id}
                 className="flex items-center justify-between gap-3 py-2.5"
               >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">
-                    {member.name}
-                    {member.id === viewer.userId ? (
-                      <span className="font-normal text-muted-foreground">
-                        {" "}
-                        (you)
-                      </span>
-                    ) : null}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {member.email}
-                  </p>
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar src={member.image} name={member.name} size="sm" />
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">
+                      {member.name}
+                      {member.id === viewer.userId ? (
+                        <span className="font-normal text-muted-foreground">
+                          {" "}
+                          (you)
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {member.email}
+                    </p>
+                  </div>
                 </div>
                 <span
                   className={

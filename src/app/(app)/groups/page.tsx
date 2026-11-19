@@ -15,7 +15,7 @@ import {
   getPendingInvitationsForEmail,
   getUserGroups,
 } from "@/server/groups/group.queries";
-import { GroupAvatar } from "./_components/group-avatar";
+import { Avatar } from "@/components/avatar";
 import { GroupForm } from "./_components/group-form";
 import { InvitationInbox } from "./_components/invitation-inbox";
 
@@ -82,7 +82,7 @@ async function GroupList() {
             href={`/groups/${group.id}`}
             className="flex items-start gap-3 rounded-xl border p-4 transition-colors hover:bg-muted/50"
           >
-            <GroupAvatar src={group.image} name={group.name} size="sm" />
+            <Avatar src={group.image} name={group.name} size="sm" />
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="font-medium">{group.name}</span>
