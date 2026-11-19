@@ -77,3 +77,17 @@ export interface BorrowingItemResponse extends RequestResponse {
   itemName: string;
   groupName: string;
 }
+/**
+ * Defines a request displayed on the item owner's Lending Items page.
+ * Includes all RequestResponse fields and the related display names.
+ */
+export interface LendingItemResponse extends RequestResponse {
+  // Name of the item requested by the borrower.
+  itemName: string;
+
+  // Display name of the user who submitted the request.
+  borrowerName: string;
+
+  // Name of the group through which the request was submitted.
+  groupName: string;
+}
