@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowRight, Package } from "lucide-react";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/lib/prisma";
 import { requireUser } from "@/server/auth/session";
@@ -117,12 +117,12 @@ function RequestSection({
             {borrowing ? "Recent requests you’ve sent" : "Recent requests for your items"}
           </p>
         </div>
-        {/* TODO: Link to the corresponding borrowing or lending page when its route is available. */}
-        <span title={`${borrowing ? "Borrowing" : "Lending"} page coming soon`}>
-          <Button type="button" variant="outline" disabled>
-            View {direction} requests <ArrowRight aria-hidden="true" />
-          </Button>
-        </span>
+        <Link
+          href={borrowing ? "/borrowing-items" : "/lending-items"}
+          className={buttonVariants({ variant: "outline" })}
+        >
+          View {direction} requests <ArrowRight aria-hidden="true" />
+        </Link>
       </div>
       {requests.length === 0 ? (
         <p className="mt-5 rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
