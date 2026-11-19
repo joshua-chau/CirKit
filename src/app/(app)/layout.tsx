@@ -8,6 +8,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import prisma from "@/lib/prisma";
 import { DEFAULT_LOGIN_REDIRECT } from "@/lib/routes";
 import { requireUser } from "@/server/auth/session";
+import { groupImageUrl } from "@/server/groups/group-image";
 
 /**
  * Shell for logged-in pages (/dashboard, /groups/..., etc.).
@@ -86,8 +87,13 @@ async function GroupsSidebar() {
   const memberships = await prisma.groupMember.findMany({
     where: { userId: user.id },
     orderBy: { group: { name: "asc" } },
-    select: { group: { select: { id: true, name: true } } },
+    select: { group: { select: { id: true, name: true, image: true } } },
   });
+  const groups = memberships.map(({ group: { id, name, image } }) => ({
+    id,
+    name,
+    image: groupImageUrl(id, image),
+  }));
 
-  return <AppSidebar groups={memberships.map(({ group }) => group)} />;
+  return <AppSidebar groups={groups} />;
 }

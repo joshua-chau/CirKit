@@ -7,11 +7,12 @@ import { Dialog } from "@base-ui/react/dialog";
 import { PanelLeftClose, PanelLeftOpen, Plus, X } from "lucide-react";
 
 import { GroupForm } from "@/app/(app)/groups/_components/group-form";
+import { Avatar } from "@/components/avatar";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { createGroupAction } from "@/server/groups/group.actions";
 
-export function AppSidebar({ groups }: { groups: { id: string; name: string }[] }) {
+export function AppSidebar({ groups }: { groups: { id: string; name: string; image: string | null }[] }) {
   const [expanded, setExpanded] = useState(true);
   const pathname = usePathname();
   const groupListId = useId();
@@ -44,10 +45,7 @@ export function AppSidebar({ groups }: { groups: { id: string; name: string }[] 
                   expanded ? "justify-start" : "justify-center",
                 )}
               >
-                {/* TODO: Use the uploaded Group avatar once the image field and read route are ready. */}
-                <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-full bg-sidebar-accent text-xs font-semibold">
-                  {Array.from(group.name.trim())[0]?.toUpperCase() ?? "?"}
-                </span>
+                <Avatar src={group.image} name={group.name} size="xs" />
                 {expanded && <span className="min-w-0 truncate">{group.name}</span>}
               </Link>
             </li>
