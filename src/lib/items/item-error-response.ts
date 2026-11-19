@@ -3,6 +3,8 @@ import "server-only";
 import { AuthenticationError } from "@/lib/require-user";
 import { ItemValidationError } from "@/lib/items/item-validation";
 import { ItemError } from "@/lib/items/item-errors";
+import { ImageValidationError } from "@/lib/image-validation";
+import { StorageError } from "@/lib/storage";
 
 export function createItemErrorResponse(error: unknown): Response {
   let status = 500;
@@ -13,6 +15,14 @@ export function createItemErrorResponse(error: unknown): Response {
     status = 401;
     code = "UNAUTHENTICATED";
     message = error.message;
+  } else if (error instanceof ImageValidationError) {
+    status = error.code === "IMAGE_TOO_LARGE" ? 413 : 400;
+    code = error.code;
+    message = error.message;
+  } else if (error instanceof StorageError) {
+    status = { NOT_FOUND: 404, INVALID_INPUT: 400, NOT_CONFIGURED: 503 }[error.code];
+    code = error.code;
+    message = error.code === "NOT_CONFIGURED" ? "Image storage is unavailable." : error.message;
   } else if (error instanceof ItemValidationError) {
     status = 400;
     code = "INVALID_INPUT";

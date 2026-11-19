@@ -4,21 +4,12 @@ import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/lib/prisma";
 import type { GroupInput } from "@/lib/validation/group.schema";
 import { ConflictError, NotFoundError, ValidationError } from "@/server/errors";
+import { cleanupGroupImage } from "./group-image";
+import { lockGroup } from "./group.lock";
 import { requireGroupMember, requireGroupOwner } from "./group.permissions";
 
 type Tx = Prisma.TransactionClient;
 
-/**
- * Locks the group row for the rest of the transaction, so two membership
- * changes on one group (e.g. transfer + leave) cannot interleave.
- * Note: "group" is an SQL keyword, hence the quotes.
- */
-async function lockGroup(tx: Tx, groupId: string) {
-  const rows = await tx.$queryRaw<{ id: string }[]>`
-    SELECT "id" FROM "group" WHERE "id" = ${groupId} FOR UPDATE
-  `;
-  if (rows.length === 0) throw new NotFoundError("Group not found.");
-}
 
 /** Creates a group with the creator as its OWNER, in one statement. */
 export async function createGroup(userId: string, input: GroupInput) {
@@ -166,7 +157,7 @@ export async function transferOwnership(groupId: string, ownerId: string, newOwn
  * with ON DELETE RESTRICT, and history must be kept).
  */
 export async function deleteGroup(groupId: string, ownerId: string) {
-  await prisma.$transaction(async (tx) => {
+  const imageKey = await prisma.$transaction(async (tx) => {
     await lockGroup(tx, groupId);
     await requireGroupOwner(groupId, ownerId, tx);
 
@@ -185,6 +176,9 @@ export async function deleteGroup(groupId: string, ownerId: string) {
     }
 
     // Members and invitations are removed by ON DELETE CASCADE.
-    await tx.group.delete({ where: { id: groupId } });
+    const deleted = await tx.group.delete({ where: { id: groupId }, select: { image: true } });
+    return deleted.image;
   });
+  // Remove the picture from storage only after the group is really gone.
+  if (imageKey) await cleanupGroupImage(imageKey);
 }

@@ -1,16 +1,19 @@
 "use client";
 
+import { useState } from "react";
+import Link from "next/link";
 import { Avatar } from "@base-ui/react/avatar";
 import { Popover } from "@base-ui/react/popover";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 
 export function UserMenu({ name, image }: { name: string; image?: string | null }) {
+  const [open, setOpen] = useState(false);
   const initial = Array.from(name.trim())[0]?.toUpperCase() ?? "?";
 
   return (
-    <Popover.Root>
+    <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
         aria-label="Open account menu"
         className="grid size-9 place-items-center rounded-full bg-muted text-sm font-semibold ring-offset-2 transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
@@ -25,8 +28,13 @@ export function UserMenu({ name, image }: { name: string; image?: string | null 
           <Popover.Popup className="w-56 space-y-3 rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg [font-family:var(--font-geist-sans)]">
             <Popover.Title className="break-words text-sm font-semibold">{name}</Popover.Title>
             <div className="grid gap-2 border-t pt-3">
-              {/* TODO: Link to the Profile page once the route exists. */}
-              <Button type="button" variant="outline" disabled>View profile</Button>
+              <Link
+                href="/profile"
+                className={buttonVariants({ variant: "outline" })}
+                onNavigate={() => setOpen(false)}
+              >
+                View profile
+              </Link>
               <SignOutButton />
             </div>
           </Popover.Popup>
