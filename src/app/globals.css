@@ -128,3 +128,28 @@
     @apply font-sans;
   }
 }
+/* A scroll box whose scroll bar stays visible (macOS hides overlay scroll
+   bars until you scroll). Used by the group page's shared item list. */
+@layer components {
+  .scroll-panel {
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+  .scroll-panel::-webkit-scrollbar {
+    width: 8px;
+  }
+  .scroll-panel::-webkit-scrollbar-track {
+    border-radius: 9999px;
+    background: var(--muted);
+  }
+  .scroll-panel::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: color-mix(in oklab, var(--muted-foreground) 45%, transparent);
+  }
+  @supports not selector(::-webkit-scrollbar) {
+    .scroll-panel {
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in oklab, var(--muted-foreground) 45%, transparent) var(--muted);
+    }
+  }
+}

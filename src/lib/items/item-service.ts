@@ -46,6 +46,65 @@ export async function getMyItems(currentUserId: string, archived = false) {
   });
 }
 
+// Group browsing follows ItemAccess rather than item ownership.
+export async function getItemsByGroupId(currentUserId: string, groupId: string) {
+  return prisma.$transaction(async transaction => {
+    const membership = await transaction.groupMember.findUnique({
+      where: { groupId_userId: { groupId, userId: currentUserId } },
+      select: { id: true },
+    });
+    if (!membership) {
+      throw new ItemError("FORBIDDEN", "You must belong to this group to view its items.");
+    }
+    return transaction.item.findMany({
+      where: { itemArchivedAt: null, itemAccesses: { some: { groupId } } },
+      orderBy: [{ itemCreatedAt: "desc" }, { itemId: "desc" }],
+      select: itemSelect,
+    });
+  });
+}
+
+export async function createItemAccess(currentUserId: string, itemId: string, groupId: string) {
+  return prisma.$transaction(async transaction => {
+    const items = await transaction.$queryRaw<Item[]>`
+      SELECT * FROM "Item" WHERE "itemId" = ${itemId} FOR UPDATE
+    `;
+    requireItemOwner(items[0], currentUserId);
+    if (items[0].itemArchivedAt !== null) {
+      throw new ItemError("CONFLICT", "Archived items cannot be shared.");
+    }
+    const membership = await transaction.groupMember.findUnique({
+      where: { groupId_userId: { groupId, userId: currentUserId } },
+      select: { id: true },
+    });
+    if (!membership) {
+      throw new ItemError("FORBIDDEN", "You must belong to this group to share an item with it.");
+    }
+    // Repeated calls return the existing grant without changing its timestamp.
+    return transaction.itemAccess.upsert({
+      where: { itemId_groupId: { itemId, groupId } },
+      create: { itemId, groupId },
+      update: {},
+    });
+  });
+}
+
+export async function deleteItemAccess(currentUserId: string, itemId: string, groupId: string) {
+  return prisma.$transaction(async transaction => {
+    // Use the same lock as request creation/approval to serialize revocation.
+    const items = await transaction.$queryRaw<Item[]>`
+      SELECT * FROM "Item" WHERE "itemId" = ${itemId} FOR UPDATE
+    `;
+    requireItemOwner(items[0], currentUserId);
+    // Owners may revoke even after leaving a group. Existing loans retain history.
+    await transaction.request.updateMany({
+      where: { itemId, groupId, requestStatus: "PENDING" },
+      data: { requestStatus: "DECLINED" },
+    });
+    await transaction.itemAccess.deleteMany({ where: { itemId, groupId } });
+  });
+}
+
 function requireItemOwner(item: { ownerId: string } | null | undefined, userId: string) {
   if (!item) throw new ItemError("NOT_FOUND", "The requested item was not found.");
   if (item.ownerId !== userId) {

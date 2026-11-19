@@ -117,8 +117,10 @@ model Group {
 
   id          String   @id @default(cuid())
   name        String
-  // 新增可选的组描述。
+  
   description String?
+  // Public URL of the group picture in cloud storage; null = show initials.
+  image       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

@@ -20,16 +20,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-1 flex-col bg-muted/35 [font-family:var(--font-geist-sans)]">
       <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between gap-4 border-b bg-background px-5">
-        <Link
-          href={DEFAULT_LOGIN_REDIRECT}
-          aria-label="CirKit dashboard"
-          className="flex items-center gap-2.5 rounded-lg text-lg font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span className="grid size-9 place-items-center rounded-lg bg-primary text-primary-foreground">
-            <Boxes className="size-5" aria-hidden="true" />
-          </span>
-          CirKit
-        </Link>
+        <nav aria-label="Main navigation" className="flex items-center gap-5">
+          <Link
+            href={DEFAULT_LOGIN_REDIRECT}
+            aria-label="CirKit dashboard"
+            className="flex items-center gap-2.5 rounded-lg text-lg font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className="grid size-9 place-items-center rounded-lg bg-primary text-primary-foreground">
+              <Boxes className="size-5" aria-hidden="true" />
+            </span>
+            CirKit
+          </Link>
+          <Link href="/groups" className="text-sm text-muted-foreground hover:text-foreground">
+            Groups
+          </Link>
+        </nav>
         <div className="flex items-center gap-3">
           <Link
             href="/myitems"
