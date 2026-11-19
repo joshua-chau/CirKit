@@ -92,6 +92,21 @@ function validateObjectKey(objectKey: string): void {
   }
 }
 
+// Returns the prefix for an image key based on its source.
+function imageKeyPrefix(source: UploadImageInput["source"]): string {
+  const sourceId = encodeURIComponent(source.id).replace(/\./g, "%2E");
+  return `${source.kind}/${sourceId}/`;
+}
+
+// Checks if an object key belongs to the given source.
+export function isImageKeyForSource(
+  objectKey: string,
+  source: UploadImageInput["source"],
+): boolean {
+  const prefix = imageKeyPrefix(source);
+  return objectKey.startsWith(prefix) && /^[a-z0-9-]+\.[a-z0-9]+$/i.test(objectKey.slice(prefix.length));
+}
+
 /**
  * Uploads an image under a unique resource-scoped key.
  * Validates the file before sending it to R2. Callers must check resource
@@ -109,8 +124,7 @@ export async function uploadImage(
   }
 
   const image = await validateImage(file);
-  const sourceId = encodeURIComponent(source.id).replace(/\./g, "%2E");
-  const objectKey = `${source.kind}/${sourceId}/${randomUUID()}.${image.extension}`;
+  const objectKey = `${imageKeyPrefix(source)}${randomUUID()}.${image.extension}`;
   validateObjectKey(objectKey);
 
   const { client, bucket } = getStorage();

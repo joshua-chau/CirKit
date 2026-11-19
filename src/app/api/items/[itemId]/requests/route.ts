@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/require-user";
-import { createRequestErrorResponse } from "@/lib/requests/request-error-response";
-import { mapRequestRecordsToResponseList } from "@/lib/requests/request-response-mapper";
-import { getItemRequests } from "@/lib/requests/request-service";
+import { mapRequestRecordToResponse } from "@/lib/requests/request-response-mapper";
+import { getReceivedItemRequests } from "@/lib/items/item-service";
+import { createItemErrorResponse } from "@/lib/items/item-error-response";
 
 type ItemRouteContext = {
   params: Promise<{
@@ -27,9 +27,13 @@ export async function GET(
     const params = await context.params;
     const itemId = params.itemId;
 
-    const requests = await getItemRequests(user.id, itemId);
+    const requests = await getReceivedItemRequests(user.id, itemId);
 
-    const data = mapRequestRecordsToResponseList(requests);
+    const data = requests.map(request => ({
+      ...mapRequestRecordToResponse(request),
+      borrowerName: request.borrower.name,
+      groupName: request.group.name,
+    }));
     const body = {
       data: data,
     };
@@ -43,8 +47,6 @@ export async function GET(
 
     return response;
   } catch (error) {
-    const response = createRequestErrorResponse(error);
-
-    return response;
+    return createItemErrorResponse(error);
   }
 }

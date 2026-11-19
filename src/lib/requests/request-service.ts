@@ -171,12 +171,18 @@ export async function createRequest(
  * currentUserId must come from authentication, not a client-supplied user ID.
  * Item archiving or access revocation does not remove request history.
  */
-export async function getMyRequests(
-  currentUserId: string,
-): Promise<RequestRecord[]> {
+export async function getMyRequests(currentUserId: string) {
   const requests = await prisma.request.findMany({
     where: {
       borrowerId: currentUserId,
+    },
+    include: {
+      item: {
+        select: { itemName: true },
+      },
+      group: {
+        select: { name: true },
+      },
     },
     orderBy: [
       {
@@ -184,6 +190,58 @@ export async function getMyRequests(
       },
       {
         // Use a deterministic order when creation timestamps are equal.
+        requestId: "desc",
+      },
+    ],
+  });
+
+  return requests;
+}
+
+/**
+ * Lists requests received for all items owned by the authenticated user.
+ * Includes every source group and all request statuses.
+ *
+ * Expected Read Request flow:
+ * 1. GET /api/requests/received-requests is handled by a Controller.
+ * 2. The Controller obtains the authenticated user through requireUser().
+ * 3. The Controller passes that user's ID here.
+ * 4. This Service queries requests through the related item's ownerId.
+ * 5. The Controller converts the records into LendingItemResponse objects.
+ *
+ * currentUserId must come from authentication, not client input.
+ * Archived items and revoked group access do not remove request history.
+ */
+export async function getReceivedRequests(currentUserId: string) {
+  const requests = await prisma.request.findMany({
+    where: {
+      item: {
+        ownerId: currentUserId,
+      },
+    },
+    include: {
+      item: {
+        select: {
+          itemName: true,
+        },
+      },
+      borrower: {
+        select: {
+          name: true,
+        },
+      },
+      group: {
+        select: {
+          name: true,
+        },
+      },
+    },
+    orderBy: [
+      {
+        requestCreatedAt: "desc",
+      },
+      {
+        // Keep the order stable when creation timestamps are equal.
         requestId: "desc",
       },
     ],

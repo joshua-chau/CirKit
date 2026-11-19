@@ -2,6 +2,7 @@ import "server-only";
 
 import prisma from "@/lib/prisma";
 import { NotFoundError } from "@/server/errors";
+import { groupImageUrl } from "./group-image";
 import { canInvite, canManageGroup, requireGroupMember } from "./group.permissions";
 
 /**
@@ -23,7 +24,7 @@ export async function getUserGroups(userId: string) {
     id: group.id,
     name: group.name,
     description: group.description,
-    image: group.image,
+    image: groupImageUrl(group.id, group.image),
     memberCount: group._count.members,
     role,
   }));
@@ -63,7 +64,7 @@ export async function getGroupDetail(groupId: string, userId: string) {
     id: group.id,
     name: group.name,
     description: group.description,
-    image: group.image,
+    image: groupImageUrl(group.id, group.image),
     createdAt: group.createdAt,
     members: group.members.map((m) => ({ ...m.user, role: m.role, joinedAt: m.joinedAt })),
     viewer: {
@@ -104,7 +105,7 @@ export type PendingGroupInvitation = Awaited<ReturnType<typeof getPendingGroupIn
  * The token is what accept/decline take; it's safe to show to the invitee.
  */
 export async function getPendingInvitationsForEmail(email: string) {
-  return prisma.groupInvitation.findMany({
+  const invitations = await prisma.groupInvitation.findMany({
     where: {
       email: { equals: email, mode: "insensitive" },
       status: "PENDING",
@@ -119,6 +120,10 @@ export async function getPendingInvitationsForEmail(email: string) {
       invitedBy: { select: { name: true } },
     },
   });
+  return invitations.map((invitation) => ({
+    ...invitation,
+    group: { ...invitation.group, image: groupImageUrl(invitation.group.id, invitation.group.image) },
+  }));
 }
 
 export type InboxInvitation = Awaited<ReturnType<typeof getPendingInvitationsForEmail>>[number];

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
+import { FeedbackToast } from "@/components/ui/feedback-toast";
 import type { ActionResult } from "@/server/groups/group.actions";
 
 type Props = {
@@ -14,9 +15,10 @@ type Props = {
   confirmMessage?: string;
   variant?: "default" | "outline" | "destructive" | "ghost" | "secondary";
   size?: "default" | "sm";
+  errorToastTitle?: string;
 };
 
-/** A button that runs a Server Action and shows its error inline. */
+/** A button that runs a Server Action and displays any returned error. */
 export function ActionButton({
   action,
   children,
@@ -24,6 +26,7 @@ export function ActionButton({
   confirmMessage,
   variant = "outline",
   size = "sm",
+  errorToastTitle,
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +46,14 @@ export function ActionButton({
       <Button type="button" variant={variant} size={size} disabled={pending} onClick={handleClick}>
         {pending ? pendingLabel : children}
       </Button>
-      {error ? (
+      {error && errorToastTitle ? (
+        <FeedbackToast
+          title={errorToastTitle}
+          description={error}
+          tone="error"
+          onDismiss={() => setError(null)}
+        />
+      ) : error ? (
         <span role="alert" className="max-w-xs text-right text-xs text-destructive">
           {error}
         </span>
