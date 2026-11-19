@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Bell, Boxes, Package, UsersRound } from "lucide-react";
+import { Bell, Boxes, LayoutDashboard, Package, UsersRound } from "lucide-react";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { UserMenu } from "@/components/layout/user-menu";
@@ -32,9 +32,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </Link>
         <div className="flex items-center gap-3">
           <Link
+            href={DEFAULT_LOGIN_REDIRECT}
+            aria-label="Dashboard"
+            title="Dashboard"
+            className={buttonVariants({ variant: "ghost", size: "icon-lg" })}
+          >
+            <LayoutDashboard className="size-5" aria-hidden="true" />
+          </Link>
+          <Link
             href="/groups"
-            aria-label="Groups"
-            title="Groups"
+            aria-label="My groups"
+            title="My groups"
             className={buttonVariants({ variant: "ghost", size: "icon-lg" })}
           >
             <UsersRound className="size-5" aria-hidden="true" />
@@ -70,7 +78,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
 async function AccountMenu() {
   const user = await requireUser();
-  return <UserMenu name={user.name} image={user.image} />;
+  return <UserMenu name={user.name} email={user.email} image={user.image} />;
 }
 
 async function GroupsSidebar() {

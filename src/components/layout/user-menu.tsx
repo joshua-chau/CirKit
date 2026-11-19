@@ -8,7 +8,11 @@ import { Popover } from "@base-ui/react/popover";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { buttonVariants } from "@/components/ui/button";
 
-export function UserMenu({ name, image }: { name: string; image?: string | null }) {
+export function UserMenu({ name, email, image }: {
+  name: string;
+  email: string;
+  image?: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const initial = Array.from(name.trim())[0]?.toUpperCase() ?? "?";
 
@@ -16,7 +20,8 @@ export function UserMenu({ name, image }: { name: string; image?: string | null 
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
         aria-label="Open account menu"
-        className="grid size-9 place-items-center rounded-full bg-muted text-sm font-semibold ring-offset-2 transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        title={`${name}\n${email}`}
+        className="grid size-9 cursor-pointer place-items-center rounded-full bg-muted text-sm font-semibold ring-offset-2 transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         <Avatar.Root className="grid size-full place-items-center overflow-hidden rounded-full">
           {image && <Avatar.Image src={image} alt="" className="size-full object-cover" />}

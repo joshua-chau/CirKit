@@ -59,6 +59,7 @@ export async function createGroupAction(
     return { ok: false, error: "Please fix the errors below.", fieldErrors: toFieldErrors(parsed.error) };
   }
   const group = await createGroup(user.id, parsed.data);
+  refresh();
   redirect(`/groups/${group.id}`);
 }
 
@@ -83,6 +84,7 @@ export async function deleteGroupAction(groupId: string): Promise<ActionResult> 
   if (!id.safeParse(groupId).success) return invalid();
   const result = await run(() => deleteGroup(groupId, user.id));
   if (!result.ok) return result;
+  refresh();
   redirect("/groups");
 }
 
@@ -93,6 +95,7 @@ export async function leaveGroupAction(groupId: string): Promise<ActionResult> {
   if (!id.safeParse(groupId).success) return invalid();
   const result = await run(() => leaveGroup(groupId, user.id));
   if (!result.ok) return result;
+  refresh();
   redirect("/groups");
 }
 
@@ -145,6 +148,7 @@ export async function acceptInvitationAction(token: string): Promise<ActionResul
   if (!id.safeParse(token).success) return invalid();
   const result = await run(() => acceptInvitation(token, user));
   if (!result.ok) return result;
+  refresh();
   redirect(`/groups/${result.data}`);
 }
 

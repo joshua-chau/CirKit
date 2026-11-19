@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useId } from "react";
 
 import { FormField } from "@/components/auth/form-field";
 import { Button } from "@/components/ui/button";
@@ -19,12 +19,14 @@ type Props = {
 
 /** Name + description form, used to create a group and to edit one. */
 export function GroupForm({ action, defaultValues, submitLabel, pendingLabel }: Props) {
+  const formId = useId();
   const [state, formAction, pending] = useActionState(action, null);
   const fieldErrors = state && !state.ok ? state.fieldErrors : undefined;
 
   return (
     <form action={formAction} className="grid gap-4">
       <FormField
+        id={`${formId}-name`}
         name="name"
         label="Name"
         required
@@ -33,9 +35,9 @@ export function GroupForm({ action, defaultValues, submitLabel, pendingLabel }: 
         error={fieldErrors?.name}
       />
       <div className="grid gap-2">
-        <Label htmlFor="description">Description (optional)</Label>
+        <Label htmlFor={`${formId}-description`}>Description (optional)</Label>
         <Textarea
-          id="description"
+          id={`${formId}-description`}
           name="description"
           maxLength={GROUP_DESCRIPTION_MAX}
           defaultValue={defaultValues?.description ?? ""}

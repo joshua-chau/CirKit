@@ -1,13 +1,19 @@
 "use client";
 
 import { useId, useState } from "react";
-import { PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Dialog } from "@base-ui/react/dialog";
+import { PanelLeftClose, PanelLeftOpen, Plus, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { GroupForm } from "@/app/(app)/groups/_components/group-form";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { createGroupAction } from "@/server/groups/group.actions";
 
 export function AppSidebar({ groups }: { groups: { id: string; name: string }[] }) {
   const [expanded, setExpanded] = useState(true);
+  const pathname = usePathname();
   const groupListId = useId();
   const toggleLabel = expanded ? "Collapse sidebar" : "Expand sidebar";
 
@@ -29,36 +35,62 @@ export function AppSidebar({ groups }: { groups: { id: string; name: string }[] 
         <ul className="space-y-2">
           {groups.map((group) => (
             <li key={group.id} title={group.name}>
-              {/* TODO: Link to this Group’s page when the route exists. */}
-              <Button
-                type="button"
-                variant="ghost"
+              <Link
+                href={`/groups/${group.id}`}
                 aria-label={group.name}
-                className={cn("h-10 w-full gap-2.5 px-1", expanded ? "justify-start" : "justify-center")}
-                disabled
+                className={cn(
+                  buttonVariants({ variant: "ghost" }),
+                  "h-10 w-full gap-2.5 px-1",
+                  expanded ? "justify-start" : "justify-center",
+                )}
               >
                 {/* TODO: Use the uploaded Group avatar once the image field and read route are ready. */}
                 <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-full bg-sidebar-accent text-xs font-semibold">
                   {Array.from(group.name.trim())[0]?.toUpperCase() ?? "?"}
                 </span>
                 {expanded && <span className="min-w-0 truncate">{group.name}</span>}
-              </Button>
+              </Link>
             </li>
           ))}
         </ul>
-        {/* TODO: Link to the Group creation flow once its destination is decided. */}
-        <div className="mt-3" title="Create group coming soon">
-          <Button
+        <Dialog.Root key={pathname}>
+          <Dialog.Trigger
             type="button"
-            variant="outline"
             aria-label="Create group"
-            className={cn("h-9 w-full gap-2.5", expanded ? "justify-start px-2.5" : "px-0")}
-            disabled
+            title="Create group"
+            className={cn(
+              buttonVariants({ variant: "outline" }),
+              "mt-3 h-9 w-full gap-2.5",
+              expanded ? "justify-start px-2.5" : "px-0",
+            )}
           >
             <Plus aria-hidden="true" />
             {expanded && "Create group"}
-          </Button>
-        </div>
+          </Dialog.Trigger>
+          <Dialog.Portal>
+            <Dialog.Backdrop className="fixed inset-0 z-30 bg-black/30" />
+            <Dialog.Popup className="fixed top-1/2 left-1/2 z-40 max-h-[calc(100dvh_-_2rem)] w-[calc(100%_-_2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border bg-card p-6 text-card-foreground shadow-lg [font-family:var(--font-geist-sans)]">
+              <div className="mb-4 pr-8">
+                <Dialog.Title className="text-lg font-semibold">Create a group</Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm text-muted-foreground">
+                  You&apos;ll be its owner and can invite others.
+                </Dialog.Description>
+              </div>
+              <GroupForm
+                action={createGroupAction}
+                submitLabel="Create group"
+                pendingLabel="Creating…"
+              />
+              <Dialog.Close
+                type="button"
+                aria-label="Close"
+                className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "absolute top-3 right-3")}
+              >
+                <X aria-hidden="true" />
+              </Dialog.Close>
+            </Dialog.Popup>
+          </Dialog.Portal>
+        </Dialog.Root>
       </div>
       <div className="mt-3 border-t border-sidebar-border pt-3">
         <Button
