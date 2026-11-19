@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import type { RequestResponse } from "@/lib/requests/request-types";
 
@@ -54,16 +55,49 @@ export function ItemRequests({ itemId }: { itemId: string }) {
         : error ? <p role="alert" className="mt-4 text-destructive">{error}</p>
         : requests.length === 0 ? <p className="mt-4 text-muted-foreground">No requests for this item yet.</p>
         : <ul className="mt-4 space-y-3">
-          {requests.map(request => (
-            <li key={request.requestId} className="rounded-lg border p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="break-words font-medium">{request.borrowerName}</h3>
-                <span className="rounded-full bg-secondary px-2.5 py-1 text-xs">{labels[request.requestStatus]}</span>
-              </div>
-              <p className="mt-2 break-words text-sm text-muted-foreground">{request.groupName}</p>
-              <p className="mt-1 text-sm">{formatDate(request.requestStartDate)} – {formatDate(request.requestEndDate)}</p>
-            </li>
-          ))}
+          {requests.map((request) => {
+            // Use this request's ID to locate its entry on the Lending Items page.
+            const encodedRequestId = encodeURIComponent(request.requestId);
+            const requestUrl = "/lending-items?requestId=" + encodedRequestId;
+
+            const startDate = formatDate(request.requestStartDate);
+            const endDate = formatDate(request.requestEndDate);
+            const statusLabel = labels[request.requestStatus];
+
+            const entry = (
+              <li
+                key={request.requestId}
+                className="rounded-lg border p-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="break-words font-medium">
+                    {request.borrowerName}
+                  </h3>
+                  <span className="rounded-full bg-secondary px-2.5 py-1 text-xs">
+                    {statusLabel}
+                  </span>
+                </div>
+
+                <p className="mt-2 break-words text-sm text-muted-foreground">
+                  {request.groupName}
+                </p>
+
+                <p className="mt-1 text-sm">
+                  {startDate} – {endDate}
+                </p>
+
+                <Link
+                  href={requestUrl}
+                  scroll={false}
+                  className="mt-3 inline-block rounded-sm text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                >
+                  View request
+                </Link>
+              </li>
+            );
+
+            return entry;
+          })}
         </ul>}
     </section>
   );
