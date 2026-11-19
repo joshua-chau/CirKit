@@ -104,6 +104,7 @@ async function GroupContent({ params }: Props) {
           <ActionButton
             action={leaveGroupAction.bind(null, group.id)}
             pendingLabel="Leaving…"
+            errorToastTitle="Couldn’t leave group"
             confirmMessage={`Leave "${group.name}"? Your pending requests in this group will be declined and your items will stop being shared with it.`}
             variant="destructive"
           >

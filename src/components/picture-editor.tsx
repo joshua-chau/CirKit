@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { FeedbackToast } from "@/components/ui/feedback-toast";
 import { Avatar } from "@/components/avatar";
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
@@ -185,13 +186,10 @@ export function PictureEditor({ endpoint, name, image, removeConfirm }: Props) {
         ) : null}
       </div>
 
-      {message ? (
-        <p
-          role={message.ok ? "status" : "alert"}
-          className={message.ok ? "text-sm" : "text-sm text-destructive"}
-        >
-          {message.text}
-        </p>
+      {message?.ok ? (
+        <FeedbackToast title={message.text} onDismiss={() => setMessage(null)} />
+      ) : message ? (
+        <p role="alert" className="text-sm text-destructive">{message.text}</p>
       ) : null}
     </div>
   );
