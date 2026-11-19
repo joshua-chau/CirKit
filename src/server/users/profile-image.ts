@@ -1,7 +1,7 @@
 import "server-only";
 
 import prisma from "@/lib/prisma";
-import { deleteImage, readImage, uploadImage } from "@/lib/storage";
+import { deleteImage, isImageKeyForSource, readImage, uploadImage } from "@/lib/storage";
 import { NotFoundError } from "@/server/errors";
 
 /**
@@ -27,7 +27,7 @@ export function storedImageKey(
   const prefix = `/api/users/${encodeURIComponent(userId)}/image?`;
   if (!image.startsWith(prefix)) return null;
   const key = new URLSearchParams(image.slice(prefix.length)).get(KEY_PARAM);
-  return key && key.startsWith("users/") ? key : null;
+  return key && isImageKeyForSource(key, { kind: "users", id: userId }) ? key : null;
 }
 
 async function cleanup(key: string) {
