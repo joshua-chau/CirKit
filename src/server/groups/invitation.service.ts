@@ -2,13 +2,22 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 
+import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/lib/prisma";
 import { ConflictError, ForbiddenError, NotFoundError } from "@/server/errors";
 import { canInvite, canManageGroup, requireGroupMember } from "./group.permissions";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const DAY_MS = 24 * 60 * 60 * 1000;
+/**
+ * Invitations (including resends) one user may create per 24 hours. Every
+ * invite can send an email from the app's Gmail account, so this stops a
+ * member from using it to spam arbitrary addresses.
+ */
+export const DAILY_INVITE_LIMIT = 20;
 
 type Invitee = { id: string; email: string };
+type Tx = Prisma.TransactionClient;
 
 /** Unguessable, URL-safe token (256 bits). */
 function newToken() {
@@ -19,9 +28,28 @@ function sameEmail(a: string, b: string) {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
+/** What callers need to email an invitation. */
+const invitationForEmail = {
+  id: true,
+  token: true,
+  email: true,
+  expiresAt: true,
+  group: { select: { name: true } },
+  invitedBy: { select: { name: true } },
+} as const;
+
+async function requireUnderDailyLimit(tx: Tx, inviterId: string) {
+  const recent = await tx.groupInvitation.count({
+    where: { invitedById: inviterId, createdAt: { gt: new Date(Date.now() - DAY_MS) } },
+  });
+  if (recent >= DAILY_INVITE_LIMIT) {
+    throw new ConflictError(`You can send up to ${DAILY_INVITE_LIMIT} invitations a day. Try again tomorrow.`);
+  }
+}
+
 /**
- * Invites an email address to the group. Delivery is a copyable
- * /invites/<token> link for now (email sending is planned later).
+ * Invites an email address to the group. The caller emails the link (see
+ * group.actions); members can also copy it from the pending list.
  */
 export async function createInvitation(groupId: string, inviterId: string, email: string) {
   return prisma.$transaction(async (tx) => {
@@ -50,6 +78,7 @@ export async function createInvitation(groupId: string, inviterId: string, email
       select: { id: true },
     });
     if (pending) throw new ConflictError("This email already has a pending invitation.");
+    await requireUnderDailyLimit(tx, inviterId);
 
     return tx.groupInvitation.create({
       data: {
@@ -59,7 +88,45 @@ export async function createInvitation(groupId: string, inviterId: string, email
         token: newToken(),
         expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
       },
-      select: { id: true, token: true },
+      select: invitationForEmail,
+    });
+  });
+}
+
+/**
+ * Resends a pending (or expired) invitation: the old link stops working and
+ * a fresh one with a new 7-day expiry is created for the same email. Same
+ * permission as revoking; counts toward the daily limit.
+ */
+export async function resendInvitation(groupId: string, userId: string, invitationId: string) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "group" WHERE "id" = ${groupId} FOR UPDATE`;
+    const membership = await requireGroupMember(groupId, userId, tx);
+    const invitation = await tx.groupInvitation.findFirst({ where: { id: invitationId, groupId } });
+    if (!invitation) throw new NotFoundError("Invitation not found.");
+    if (invitation.invitedById !== userId && !canManageGroup(membership.role)) {
+      throw new ForbiddenError("Only the person who sent the invitation or the owner can resend it.");
+    }
+    if (invitation.status !== "PENDING" && invitation.status !== "EXPIRED") {
+      throw new ConflictError(`This invitation is already ${invitation.status.toLowerCase()}.`);
+    }
+    const alreadyMember = await tx.groupMember.findFirst({
+      where: { groupId, user: { email: { equals: invitation.email, mode: "insensitive" } } },
+      select: { id: true },
+    });
+    if (alreadyMember) throw new ConflictError("This person is already a member.");
+    await requireUnderDailyLimit(tx, userId);
+
+    await tx.groupInvitation.update({ where: { id: invitation.id }, data: { status: "REVOKED" } });
+    return tx.groupInvitation.create({
+      data: {
+        groupId,
+        email: invitation.email,
+        invitedById: userId,
+        token: newToken(),
+        expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
+      },
+      select: invitationForEmail,
     });
   });
 }

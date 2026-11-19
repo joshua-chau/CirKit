@@ -15,11 +15,13 @@ import { groupInputSchema, inviteInputSchema } from "@/lib/validation/group.sche
 import { toFieldErrors, type FieldErrors } from "@/lib/validation/auth.schema";
 import { requireUser } from "@/server/auth/session";
 import { DomainError } from "@/server/errors";
+import { sendInvitationEmail, type InvitationEmailStatus } from "@/server/email/invitation-email";
 import { createGroup, deleteGroup, leaveGroup, removeMember, transferOwnership, updateGroup } from "./group.service";
 import {
   acceptInvitation,
   createInvitation,
   declineInvitation,
+  resendInvitation,
   revokeInvitation,
 } from "./invitation.service";
 
@@ -118,11 +120,24 @@ export async function transferOwnershipAction(groupId: string, newOwnerUserId: s
 
 // ----------------------------------------------------------- invitations
 
+export type InviteResult = { invitePath: string; email: InvitationEmailStatus };
+
+/** Emails a just-created invitation; never fails the action. */
+function emailInvitation(invitation: Awaited<ReturnType<typeof createInvitation>>) {
+  return sendInvitationEmail({
+    to: invitation.email,
+    token: invitation.token,
+    groupName: invitation.group.name,
+    inviterName: invitation.invitedBy.name,
+    expiresAt: invitation.expiresAt,
+  });
+}
+
 export async function inviteMemberAction(
   groupId: string,
-  _prev: ActionResult<{ invitePath: string }> | null,
+  _prev: ActionResult<InviteResult> | null,
   formData: FormData,
-): Promise<ActionResult<{ invitePath: string }>> {
+): Promise<ActionResult<InviteResult>> {
   const user = await requireUser();
   if (!id.safeParse(groupId).success) return invalid();
   const parsed = inviteInputSchema.safeParse(Object.fromEntries(formData));
@@ -131,8 +146,28 @@ export async function inviteMemberAction(
   }
   const result = await run(() => createInvitation(groupId, user.id, parsed.data.email));
   if (!result.ok) return result;
+  const email = await emailInvitation(result.data);
   refresh();
-  return { ok: true, data: { invitePath: `/invites/${result.data.token}` } };
+  return { ok: true, data: { invitePath: `/invites/${result.data.token}`, email } };
+}
+
+export async function resendInvitationAction(
+  groupId: string,
+  invitationId: string,
+): Promise<ActionResult<{ message: string }>> {
+  const user = await requireUser();
+  if (!id.safeParse(groupId).success || !id.safeParse(invitationId).success) return invalid();
+  const result = await run(() => resendInvitation(groupId, user.id, invitationId));
+  if (!result.ok) return result;
+  const email = await emailInvitation(result.data);
+  refresh();
+  const message =
+    email === "sent"
+      ? "Email sent with a new link."
+      : email === "not_configured"
+        ? "New link created. Email isn't set up, so copy the link below."
+        : "New link created, but the email couldn't be sent. Copy the link below.";
+  return { ok: true, data: { message } };
 }
 
 export async function revokeInvitationAction(groupId: string, invitationId: string): Promise<ActionResult> {
