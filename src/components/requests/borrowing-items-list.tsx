@@ -1,18 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import { RequestStatusBadge } from "@/components/requests/request-status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { loginUrlFor } from "@/lib/routes";
 import {
-  fetchBorrowingItems,
-  RequestApiError,
-  submitBorrowingAction,
-  type BorrowingAction,
-} from "@/lib/requests/request-client";
+  cancelRequestAction,
+  returnRequestAction,
+  type RequestActionResult,
+} from "@/server/requests/request.actions";
 import type { BorrowingItemResponse } from "@/lib/requests/request-types";
+
+// Added: The Server Component owns the list data.
+type BorrowingItemsListProps = {
+  requests: BorrowingItemResponse[];
+  loadError: string;
+};
+
+type BorrowingAction = "cancel" | "return";
 
 const dateFormatter = new Intl.DateTimeFormat("en-CA", {
   month: "short",
@@ -22,111 +29,102 @@ const dateFormatter = new Intl.DateTimeFormat("en-CA", {
 });
 
 function formatRequestDate(value: string) {
-  // The API sends calendar dates. Format them without shifting the day.
+  // Preserve calendar dates without shifting the borrowing day.
   const date = new Date(value + "T00:00:00Z");
   const formattedDate = dateFormatter.format(date);
 
   return formattedDate;
 }
+export function BorrowingItemsList({
+  requests,
+  loadError,
+}: BorrowingItemsListProps) {
+  const router = useRouter();
 
-
-
-// Defining the components status
-export function BorrowingItemsList() {
-  const [requests, setRequests] = useState<BorrowingItemResponse[]>([]);
-  const [loadVersion, setLoadVersion] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loadError, setLoadError] = useState("");
+  // Changed: Keep interaction state locally, but render requests from props.
   const [actionError, setActionError] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const actionInProgress = useRef(false);
 
-  useEffect(() => {
-    const controller = new AbortController();
-
-    async function loadRequests() {
-      try {
-        const records = await fetchBorrowingItems(controller.signal);
-
-        if (!controller.signal.aborted) {
-          setRequests(records);
-        }
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        if (error instanceof RequestApiError && error.status === 401) {
-          const loginUrl = loginUrlFor("/borrowing-items");
-          window.location.assign(loginUrl);
-          return;
-        }
-
-        setLoadError("Could not load your borrowing items.");
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsLoading(false);
-        }
-      }
+  // Changed: Reload the Server Component instead of calling the list API.
+  function refreshRequests(): void {
+    if (isPending || actionInProgress.current) {
+      return;
     }
 
-    void loadRequests();
-
-    return () => {
-      controller.abort();
-    };
-  }, [loadVersion]);
-
-  function refreshRequests() {
-    setLoadError("");
-    setIsLoading(true);
-    setLoadVersion((version) => version + 1);
-  }
-
-  async function handleAction(requestId: string, action: BorrowingAction) {
-    setIsSubmitting(true);
     setActionError("");
 
-    try {
-      await submitBorrowingAction(requestId, action);
-      refreshRequests();
-    } catch (error) {
-      if (error instanceof RequestApiError && error.status === 401) {
-        const loginUrl = loginUrlFor("/borrowing-items");
-        window.location.assign(loginUrl);
-        return;
-      }
-
-      if (error instanceof RequestApiError) {
-        setActionError(error.message);
-
-        if (error.status === 409) {
-          refreshRequests();
-        }
-      } else {
-        setActionError("Could not update this request. Try again.");
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
+    startTransition(() => {
+      router.refresh();
+    });
   }
 
-  const actionsDisabled = isLoading || isSubmitting || loadError.length > 0;
-  const showEmptyState = !isLoading && !loadError && requests.length === 0;
+  // Changed: Invoke Server Actions instead of posting to Request API routes.
+  function handleAction(
+    requestId: string,
+    action: BorrowingAction,
+  ): void {
+    if (isPending || actionInProgress.current) {
+      return;
+    }
+
+    actionInProgress.current = true;
+    setActionError("");
+
+    startTransition(async () => {
+      try {
+        let result: RequestActionResult;
+
+        if (action === "cancel") {
+          result = await cancelRequestAction(requestId);
+        } else {
+          result = await returnRequestAction(requestId);
+        }
+
+        if (!result.ok) {
+          setActionError(result.error);
+
+          // Added: Reload stale records after a state conflict or missing request.
+          if (
+            result.code === "CONFLICT" ||
+            result.code === "NOT_FOUND"
+          ) {
+            router.refresh();
+          }
+        }
+
+        // Successful Actions revalidate this page and return updated server data.
+      } catch {
+        setActionError(
+          "Could not confirm the update. Refresh the list to check its status.",
+        );
+      } finally {
+        actionInProgress.current = false;
+      }
+    });
+  }
+
+  const hasLoadError = loadError.length > 0;
+  const actionsDisabled = isPending || hasLoadError;
+  const showEmptyState = !hasLoadError && requests.length === 0;
 
   const list = (
-    <div className="space-y-4" aria-busy={isLoading || isSubmitting}>
-      {isLoading && <p role="status">Loading borrowing items…</p>}
+    <div className="space-y-4" aria-busy={isPending}>
+      {isPending && <p role="status">Updating borrowing items…</p>}
 
-      {loadError && (
-        <div className="flex flex-wrap items-center gap-3">
-          <p role="alert">{loadError}</p>
-          <Button type="button" variant="outline" onClick={refreshRequests}>
-            Try again
-          </Button>
-        </div>
-      )}
+      {hasLoadError && <p role="alert">{loadError}</p>}
 
       {actionError && <p role="alert">{actionError}</p>}
+
+      {/* Added: Refresh server data without maintaining another client list. */}
+      <Button
+        type="button"
+        variant="outline"
+        disabled={isPending}
+        onClick={refreshRequests}
+      >
+        Refresh requests
+      </Button>
 
       {showEmptyState && (
         <p className="text-muted-foreground">You haven’t requested any items yet.</p>

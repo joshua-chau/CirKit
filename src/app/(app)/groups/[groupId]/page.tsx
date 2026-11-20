@@ -16,8 +16,9 @@ import { NotFoundError } from "@/server/errors";
 import {
   inviteMemberAction,
   leaveGroupAction,
-  listItemInGroupAction,
 } from "@/server/groups/group.actions";
+// Changed: Delegate item sharing to the Item module's Server Action.
+import { shareItemWithGroupAction } from "@/server/items/item.actions";
 import {
   getListableItems,
   getSharedItemsForGroup,
@@ -130,7 +131,7 @@ async function GroupContent({ params }: Props) {
           />
           <div className={items.length > 0 ? "border-t pt-4" : undefined}>
             <ListItemForm
-              action={listItemInGroupAction.bind(null, group.id)}
+              action={shareItemWithGroupAction.bind(null, group.id)}
               items={listable.items}
               hasItems={listable.hasItems}
             />

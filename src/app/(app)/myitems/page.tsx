@@ -1,169 +1,137 @@
-"use client";
-
-import { useEffect, useState } from "react";
+import { Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import type { Item } from "@/generated/prisma/client";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { ItemRefreshButton } from "@/components/items/item-refresh-button";
+import { getMyItems } from "@/lib/items/item-service";
+import type { ItemSummary } from "@/lib/items/item-types";
+import { requireUser } from "@/server/auth/session";
+import { mapItemToView } from "@/server/items/item-view";
 
-type ItemSummary = Pick<
-  Item,
-  "itemId" | "itemName" | "itemCategory" | "itemCondition" | "itemStatus"
-> & { itemImageUrl: string | null; activeRequestCount: number };
-
-type ItemsResponse = {
-  data?: ItemSummary[];
-  error?: { code: string; message: string };
+type Props = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default function MyItemsPage() {
-  const [items, setItems] = useState<ItemSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  const [archived, setArchived] = useState(false);
+// Changed: Read the inventory on the server and keep the list selection in the URL.
+export default function MyItemsPage({ searchParams }: Props) {
+  const page = (
+    <Suspense fallback={<p role="status">Loading your items…</p>}>
+      <MyItemsContent searchParams={searchParams} />
+    </Suspense>
+  );
 
-  useEffect(() => {
-    const controller = new AbortController();
+  return page;
+}
 
-    async function loadItems() {
-      try {
-        const response = await fetch(`/api/items?archived=${archived}`, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
-        if (response.status === 401) {
-          throw new Error("Please sign in to view your items.");
-        }
-        const result: ItemsResponse = await response.json();
-        if (!response.ok) {
-          throw new Error(result.error?.message ?? "Unable to load your items.");
-        }
-        if (!Array.isArray(result.data)) {
-          throw new Error("The server returned an unexpected response.");
-        }
-        if (!controller.signal.aborted) setItems(result.data);
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          setError(error instanceof Error ? error.message : "Unable to load your items.");
-        }
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
+async function MyItemsContent({ searchParams }: Props) {
+  const user = await requireUser();
+  const params = await searchParams;
+  const archived = params.archived === "true";
+  const items: ItemSummary[] = [];
+  let loadError = "";
+  try {
+    const records = await getMyItems(user.id, archived);
+    for (const record of records) {
+      const item = mapItemToView(record);
+      items.push({ ...item, activeRequestCount: record.activeRequestCount });
     }
-
-    void loadItems();
-    return () => controller.abort();
-  }, [attempt, archived]);
-
-  function retry() {
-    setError(null);
-    setLoading(true);
-    setAttempt(value => value + 1);
+  } catch (error) {
+    console.error("Could not load owned items:", error);
+    loadError = "Could not load your items. Try again.";
   }
 
-  function selectList(showArchived: boolean) {
-    if (showArchived === archived) return;
-    setItems([]);
-    setError(null);
-    setLoading(true);
-    setArchived(showArchived);
+  const active: ItemSummary[] = [];
+  const inactive: ItemSummary[] = [];
+  for (const item of items) {
+    if (item.itemStatus === "BORROWED" || item.activeRequestCount > 0) {
+      active.push(item);
+    } else {
+      inactive.push(item);
+    }
   }
-
-  const isActive = (item: ItemSummary) => item.itemStatus === "BORROWED" || item.activeRequestCount > 0;
-  const sections = archived ? [
-    { title: "Archived items", description: "Items hidden from current and group listings. Details and request history are retained.", items },
-  ] : [
-    { title: "Active items", description: "Items with pending requests or currently lent out.", items: items.filter(isActive) },
-    { title: "Inactive items", description: "Available items with no pending or approved requests.", items: items.filter(item => !isActive(item)) },
+  let sections = [
+    { title: "Active items", description: "Items with pending requests or currently lent out.", items: active },
+    { title: "Inactive items", description: "Available items with no pending or approved requests.", items: inactive },
   ];
+  let emptyTitle = "No items yet";
+  let emptyDescription = "Items you add will appear here.";
+  let currentVariant: "default" | "outline" = "default";
+  let archivedVariant: "default" | "outline" = "outline";
+  let currentPage: "page" | undefined = "page";
+  let archivedPage: "page" | undefined;
+  if (archived) {
+    sections = [{ title: "Archived items", description: "Details and request history are retained.", items: items }];
+    emptyTitle = "No archived items";
+    emptyDescription = "Items you archive will appear here.";
+    currentVariant = "outline";
+    archivedVariant = "default";
+    currentPage = undefined;
+    archivedPage = "page";
+  }
+  const currentClass = buttonVariants({ variant: currentVariant });
+  const archivedClass = buttonVariants({ variant: archivedVariant });
+  const addClass = buttonVariants({ variant: "default" });
+  const showEmpty = !loadError && items.length === 0;
 
-  return (
+  const page = (
     <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
-      <header className="mb-8">
+      <header className="mb-8 space-y-3">
         <h1 className="text-3xl font-semibold tracking-tight">My Items</h1>
-        <p className="mt-2 text-muted-foreground">
-          Your items and their current availability.
-        </p>
-        <Link
-          href="/myitems/new"
-          className="mt-4 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          Add Item
-        </Link>
+        <p className="text-muted-foreground">Your items and their current availability.</p>
+        <Link href="/myitems/new" className={addClass}>Add Item</Link>
       </header>
-
-      <div role="group" aria-label="Item lists" className="mb-6 flex gap-2">
-        <Button type="button" variant={archived ? "outline" : "default"} aria-pressed={!archived} onClick={() => selectList(false)}>Current</Button>
-        <Button type="button" variant={archived ? "default" : "outline"} aria-pressed={archived} onClick={() => selectList(true)}>Archived</Button>
-      </div>
-
-      <section aria-label="Your items" aria-busy={loading}>
-        {loading ? (
-          <p role="status" className="rounded-xl border p-8 text-center text-muted-foreground">
-            Loading your items…
-          </p>
-        ) : error ? (
-          <div role="alert" className="rounded-xl border p-8 text-center">
-            <p className="mb-4 text-destructive">{error}</p>
-            <Button variant="outline" onClick={retry}>Try again</Button>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-12 text-center">
-            <h2 className="text-lg font-medium">{archived ? "No archived items" : "No items yet"}</h2>
-            <p className="mt-2 text-muted-foreground">
-              {archived ? "Items you archive will appear here." : "Items you add will appear here."}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-10">
-          {sections.map(section => (
-          <section key={section.title} aria-label={section.title}>
+      <nav aria-label="Item lists" className="mb-6 flex gap-2">
+        <Link href="/myitems" aria-current={currentPage} className={currentClass}>Current</Link>
+        <Link href="/myitems?archived=true" aria-current={archivedPage} className={archivedClass}>Archived</Link>
+        <ItemRefreshButton />
+      </nav>
+      {loadError && <p role="alert">{loadError}</p>}
+      {showEmpty && (
+        <div className="rounded-xl border border-dashed p-12 text-center">
+          <h2 className="text-lg font-medium">{emptyTitle}</h2>
+          <p className="mt-2 text-muted-foreground">{emptyDescription}</p>
+        </div>
+      )}
+      {!loadError && items.length > 0 && sections.map((section) => {
+        const sectionView = (
+          <section key={section.title} aria-label={section.title} className="mb-10 space-y-3">
             <h2 className="text-2xl font-semibold">{section.title}</h2>
-            <p className="mt-2 text-sm text-muted-foreground">{section.description}</p>
-            <p className="mb-4 text-sm text-muted-foreground">
-              {section.items.length} {section.items.length === 1 ? "item" : "items"}
-            </p>
-            {section.items.length === 0 && <p className="rounded-xl border border-dashed p-6 text-muted-foreground">No {section.title.toLowerCase()}.</p>}
+            <p className="text-muted-foreground">{section.description}</p>
+            <p>{section.items.length} items</p>
+            {section.items.length === 0 && <p className="rounded-xl border border-dashed p-6 text-muted-foreground">No items in this section.</p>}
             <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {section.items.map(item => (
-                <li key={item.itemId} className="min-w-0 rounded-xl border bg-card p-5 text-card-foreground">
-                  {item.itemImageUrl && <Image src={item.itemImageUrl} alt={item.itemName} width={480} height={320} unoptimized className="mb-4 h-40 w-full rounded-lg object-contain" />}
-                  <h3 className="break-words text-lg font-semibold">
-                    <Link
-                      href={`/myitems/${encodeURIComponent(item.itemId)}`}
-                      className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-                    >
-                      {item.itemName}
-                    </Link>
-                  </h3>
-                  {item.activeRequestCount > 0 && <p className="mt-2 text-sm text-muted-foreground">{item.activeRequestCount} active {item.activeRequestCount === 1 ? "request" : "requests"}</p>}
-                  <dl className="mt-4 space-y-3 text-sm">
-                    <div>
-                      <dt className="text-muted-foreground">Category</dt>
-                      <dd className="mt-1 break-words">{item.itemCategory}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground">Condition</dt>
-                      <dd className="mt-1 break-words">{item.itemCondition}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted-foreground">Availability</dt>
-                      <dd className="mt-1">
-                        <span className="inline-flex rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
-                          {archived ? "Archived" : item.itemStatus === "AVAILABLE" ? "Available" : "Borrowed"}
-                        </span>
-                      </dd>
-                    </div>
-                  </dl>
-                </li>
-              ))}
+              {section.items.map((item) => {
+                const itemPath = "/myitems/" + encodeURIComponent(item.itemId);
+                let status = "Available";
+                if (item.itemStatus === "BORROWED") {
+                  status = "Borrowed";
+                }
+                if (item.itemArchivedAt !== null) {
+                  status = "Archived";
+                }
+                const card = (
+                  <li key={item.itemId} className="min-w-0 rounded-xl border bg-card p-5 text-card-foreground">
+                    {item.itemImageUrl && <Image src={item.itemImageUrl} alt={item.itemName} width={480} height={320} unoptimized className="mb-4 h-40 w-full rounded-lg object-contain" />}
+                    <h3 className="break-words text-lg font-semibold"><Link href={itemPath} className="hover:underline">{item.itemName}</Link></h3>
+                    {item.activeRequestCount > 0 && <p className="mt-2 text-sm">{item.activeRequestCount} active requests</p>}
+                    <dl className="mt-4 space-y-3">
+                      <div><dt>Category</dt><dd>{item.itemCategory}</dd></div>
+                      <div><dt>Condition</dt><dd>{item.itemCondition}</dd></div>
+                      <div><dt>Availability</dt><dd>{status}</dd></div>
+                    </dl>
+                  </li>
+                );
+
+                return card;
+              })}
             </ul>
           </section>
-          ))}
-          </div>
-        )}
-      </section>
+        );
+
+        return sectionView;
+      })}
     </div>
   );
+
+  return page;
 }

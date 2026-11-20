@@ -4,6 +4,10 @@ const nextConfig: NextConfig = {
   /* config options here */
   experimental: {
     agentFeedback: true,
+    // Added: Allow 2 MiB images plus multipart overhead in Server Actions.
+    serverActions: {
+      bodySizeLimit: "3mb",
+    },
   },
   cacheComponents: true,
   partialPrefetching: true,
