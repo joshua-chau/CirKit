@@ -1,4 +1,4 @@
-import { revokeInvitationAction } from "@/server/groups/group.actions";
+import { resendInvitationAction, revokeInvitationAction } from "@/server/groups/group.actions";
 import type { GroupDetail, PendingGroupInvitation } from "@/server/groups/group.queries";
 import { ActionButton } from "./action-button";
 import { CopyLinkButton } from "./copy-link-button";
@@ -11,7 +11,7 @@ type Props = {
   viewer: GroupDetail["viewer"];
 };
 
-/** Pending invites with their links; the sender or the owner can revoke. */
+/** Pending invites with their links; the sender or the owner can resend or revoke. */
 export function PendingInvitations({ groupId, invitations, viewer }: Props) {
   if (invitations.length === 0) return null;
 
@@ -32,14 +32,25 @@ export function PendingInvitations({ groupId, invitations, viewer }: Props) {
                   </p>
                 </div>
                 {canRevoke ? (
-                  <ActionButton
-                    action={revokeInvitationAction.bind(null, groupId, invitation.id)}
-                    pendingLabel="Revoking…"
-                    confirmMessage={`Revoke the invitation for ${invitation.email}?`}
-                    variant="ghost"
-                  >
-                    Revoke
-                  </ActionButton>
+                  <div className="flex items-start gap-1">
+                    <ActionButton
+                      action={resendInvitationAction.bind(null, groupId, invitation.id)}
+                      pendingLabel="Sending…"
+                      confirmMessage={`Send ${invitation.email} a new invitation email? The current link will stop working.`}
+                      variant="ghost"
+                      successToastTitle="Invitation resent"
+                    >
+                      Resend
+                    </ActionButton>
+                    <ActionButton
+                      action={revokeInvitationAction.bind(null, groupId, invitation.id)}
+                      pendingLabel="Revoking…"
+                      confirmMessage={`Revoke the invitation for ${invitation.email}?`}
+                      variant="ghost"
+                    >
+                      Revoke
+                    </ActionButton>
+                  </div>
                 ) : null}
               </div>
               <CopyLinkButton path={`/invites/${invitation.token}`} />

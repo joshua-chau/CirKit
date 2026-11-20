@@ -4,10 +4,10 @@ import { useActionState, useEffect, useRef } from "react";
 
 import { FormField } from "@/components/auth/form-field";
 import { Button } from "@/components/ui/button";
-import type { ActionResult } from "@/server/groups/group.actions";
+import type { ActionResult, InviteResult } from "@/server/groups/group.actions";
 import { CopyLinkButton } from "./copy-link-button";
 
-type Result = ActionResult<{ invitePath: string }>;
+type Result = ActionResult<InviteResult>;
 
 type Props = {
   /** inviteMemberAction bound to the group id. */
@@ -49,10 +49,22 @@ export function InviteForm({ action }: Props) {
 
       {state?.ok && state.data ? (
         <div className="grid gap-1 rounded-lg bg-muted p-3 text-sm">
-          <p>
-            Invitation sent. If they have a CirKit account with this email, it&apos;s waiting on
-            their Groups page. Otherwise, send them this link (it expires in 7 days):
-          </p>
+          {state.data.email === "sent" ? (
+            <p>
+              Invitation emailed. It&apos;s also waiting on their Groups page if they already have
+              an account. You can share the link yourself too (it expires in 7 days):
+            </p>
+          ) : state.data.email === "failed" ? (
+            <p>
+              Invitation created, but the email couldn&apos;t be sent. Send them this link yourself
+              (it expires in 7 days):
+            </p>
+          ) : (
+            <p>
+              Invitation created. If they have a CirKit account with this email, it&apos;s waiting
+              on their Groups page. Otherwise, send them this link (it expires in 7 days):
+            </p>
+          )}
           <CopyLinkButton path={state.data.invitePath} />
         </div>
       ) : null}
