@@ -10,12 +10,15 @@ import {
 } from "@/generated/prisma/enums";
 import prisma from "@/lib/prisma";
 import { RequestError } from "@/lib/requests/request-errors";
+import { isRequestStartDateInPast } from "@/lib/requests/request-dates";
 import type {
   ValidatedCreateRequestInput,
 } from "@/lib/requests/request-types";
 
 /**
- * Service layer for the planned request CRUD architecture.
+ * Changed: Shared business logic for UI Server Actions and retained HTTP APIs.
+ * Both entry points authenticate callers and validate input before invoking
+ * these Services. The HTTP flow examples below describe compatibility routes.
  *
  * Expected Create Request flow:
  * 1. POST /api/requests is handled by a route.ts Controller.
@@ -135,6 +138,16 @@ export async function createRequest(
         throw new RequestError(
           "CONFLICT",
           "This item is already borrowed.",
+        );
+      }
+
+      // Added: Recheck Toronto's current day after acquiring the Item lock.
+      // The date picker alone cannot enforce the rule for API or Action callers.
+      const startDateHasPassed = isRequestStartDateInPast(input.requestStartDate);
+      if (startDateHasPassed) {
+        throw new RequestError(
+          "INVALID_INPUT",
+          "Start date cannot be before today in Toronto.",
         );
       }
 
@@ -404,6 +417,15 @@ export async function approveRequest(
         throw new RequestError(
           "CONFLICT",
           "This item is already borrowed.",
+        );
+      }
+
+      // Added: A request may have expired while waiting for its owner's decision.
+      const startDateHasPassed = isRequestStartDateInPast(request.requestStartDate);
+      if (startDateHasPassed) {
+        throw new RequestError(
+          "CONFLICT",
+          "This request cannot be approved because its start date has passed in Toronto.",
         );
       }
 

@@ -1,22 +1,28 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { RequestStatusBadge } from "@/components/requests/request-status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { loginUrlFor } from "@/lib/routes";
 import {
-  declineAllPendingItemRequests,
-  fetchLendingItems,
-  RequestApiError,
-  submitLendingAction,
-  type LendingAction,
-} from "@/lib/requests/request-client";
+  approveRequestAction,
+  declineAllPendingRequestsAction,
+  declineRequestAction,
+  type DeclineAllRequestsActionResult,
+  type RequestActionResult,
+} from "@/server/requests/request.actions";
 import type { LendingItemResponse } from "@/lib/requests/request-types";
 
-type OwnerAction = LendingAction | "decline-all";
+// Added: The Server Component owns the received request list.
+type LendingItemsListProps = {
+  requests: LendingItemResponse[];
+  loadError: string;
+};
+
+type OwnerAction = "approve" | "decline" | "decline-all";
 
 const calendarDateFormatter = new Intl.DateTimeFormat("en-CA", {
   month: "short",
@@ -51,7 +57,7 @@ function formatRequestTimestamp(value: string): string {
   return formattedTimestamp;
 }
 
-/** Preserves the selected request when an API session has expired. */
+/** Changed: Preserve the selected request when an Action session has expired. */
 function redirectToLogin(requestId: string): void {
   let destination = "/lending-items";
 
@@ -65,15 +71,16 @@ function redirectToLogin(requestId: string): void {
   window.location.assign(loginUrl);
 }
 
-export function LendingItemsList() {
+export function LendingItemsList({
+  requests,
+  loadError,
+}: LendingItemsListProps) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const targetRequestId = searchParams.get("requestId") ?? "";
 
-  const [requests, setRequests] = useState<LendingItemResponse[]>([]);
-  const [loadVersion, setLoadVersion] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loadError, setLoadError] = useState("");
+  // Changed: Keep only interaction state in the Client Component.
+  const [isPending, startTransition] = useTransition();
   const [actionError, setActionError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -83,49 +90,14 @@ export function LendingItemsList() {
   // Avoid moving focus again after every list refresh.
   const lastFocusedRequestId = useRef("");
 
-  useEffect(() => {
-    const controller = new AbortController();
-
-    async function loadRequests() {
-      try {
-        const records = await fetchLendingItems(controller.signal);
-
-        if (!controller.signal.aborted) {
-          setRequests(records);
-          setLoadError("");
-        }
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        if (error instanceof RequestApiError && error.status === 401) {
-          redirectToLogin(targetRequestId);
-          return;
-        }
-
-        setLoadError("Could not load your received requests.");
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    void loadRequests();
-
-    return () => {
-      controller.abort();
-    };
-  }, [loadVersion, targetRequestId]);
-
+  // Changed: Locate the target after server-provided records are rendered.
   useEffect(() => {
     if (targetRequestId.length === 0) {
       lastFocusedRequestId.current = "";
       return;
     }
 
-    if (isLoading || loadError.length > 0) {
+    if (loadError.length > 0) {
       return;
     }
 
@@ -133,7 +105,7 @@ export function LendingItemsList() {
       return;
     }
 
-    // The element is found only after its API record has been rendered.
+    // The element is found only after its server-provided record is rendered.
     const elementId = "received-request-" + targetRequestId;
     const element = document.getElementById(elementId);
 
@@ -145,24 +117,28 @@ export function LendingItemsList() {
     element.scrollIntoView({ block: "center" });
 
     lastFocusedRequestId.current = targetRequestId;
-  }, [requests, targetRequestId, isLoading, loadError]);
+  }, [requests, targetRequestId, loadError]);
 
-  function refreshRequests() {
-    setLoadError("");
-    setIsLoading(true);
+  // Changed: Refresh the server-rendered list.
+  function refreshRequests(): void {
+    if (isPending || actionInProgress.current) {
+      return;
+    }
 
-    setLoadVersion((version) => {
-      const nextVersion = version + 1;
+    setActionError("");
+    setSuccessMessage("");
 
-      return nextVersion;
+    startTransition(() => {
+      router.refresh();
     });
   }
 
-  async function handleAction(
+  // Changed: Submit owner operations through Server Actions.
+  function handleAction(
     request: LendingItemResponse,
     action: OwnerAction,
-  ) {
-    if (actionInProgress.current) {
+  ): void {
+    if (isPending || actionInProgress.current) {
       return;
     }
 
@@ -193,24 +169,47 @@ export function LendingItemsList() {
     }
 
     actionInProgress.current = true;
-    setIsSubmitting(true);
     setActionError("");
     setSuccessMessage("");
 
-    try {
-      if (action === "decline-all") {
-        const declinedCount = await declineAllPendingItemRequests(
-          request.itemId,
-        );
-
-        const message =
-          "Pending requests declined for this item: " + declinedCount + ".";
-
-        setSuccessMessage(message);
-      } else {
-        await submitLendingAction(request.requestId, action);
+    startTransition(async () => {
+      try {
+        let result: RequestActionResult | DeclineAllRequestsActionResult;
 
         if (action === "approve") {
+          result = await approveRequestAction(request.requestId);
+        } else if (action === "decline") {
+          result = await declineRequestAction(request.requestId);
+        } else {
+          result = await declineAllPendingRequestsAction(request.itemId);
+        }
+
+        if (!result.ok) {
+          if (result.code === "UNAUTHENTICATED") {
+            // Preserve the existing requestId when returning through login.
+            redirectToLogin(targetRequestId);
+            return;
+          }
+
+          setActionError(result.error);
+
+          if (
+            result.code === "CONFLICT" ||
+            result.code === "NOT_FOUND"
+          ) {
+            router.refresh();
+          }
+
+          return;
+        }
+
+        if ("declinedCount" in result) {
+          const message =
+            "Pending requests declined for this item: " +
+            result.declinedCount + ".";
+
+          setSuccessMessage(message);
+        } else if (action === "approve") {
           setSuccessMessage(
             "Request approved. The item is borrowed, and its other " +
             "pending requests have been declined.",
@@ -218,35 +217,24 @@ export function LendingItemsList() {
         } else {
           setSuccessMessage("Request declined.");
         }
-      }
 
-      refreshRequests();
-    } catch (error) {
-      if (error instanceof RequestApiError && error.status === 401) {
-        redirectToLogin(targetRequestId);
-        return;
+        // Successful Actions return refreshed server data through revalidation.
+      } catch {
+        setActionError(
+          "Could not confirm the update. Refresh the list to check its status.",
+        );
+      } finally {
+        actionInProgress.current = false;
       }
-
-      if (error instanceof RequestApiError) {
-        setActionError(error.message);
-
-        if (error.status === 409) {
-          refreshRequests();
-        }
-      } else {
-        setActionError("Could not update the request. Try again.");
-      }
-    } finally {
-      actionInProgress.current = false;
-      setIsSubmitting(false);
-    }
+    });
   }
 
-  const actionsDisabled =
-    isLoading || isSubmitting || loadError.length > 0;
+  // Changed: Use transition state instead of separate API loading flags.
+  const hasLoadError = loadError.length > 0;
+  const actionsDisabled = isPending || hasLoadError;
 
   const showEmptyState =
-    !isLoading && loadError.length === 0 && requests.length === 0;
+    !hasLoadError && requests.length === 0;
 
   const targetExists = requests.some((request) => {
     const matchesTarget = request.requestId === targetRequestId;
@@ -255,13 +243,12 @@ export function LendingItemsList() {
   });
 
   const showMissingTarget =
-    !isLoading &&
-    loadError.length === 0 &&
+    !hasLoadError &&
     targetRequestId.length > 0 &&
     !targetExists;
 
   const list = (
-    <div className="space-y-4" aria-busy={isLoading || isSubmitting}>
+    <div className="space-y-4" aria-busy={isPending}>
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground">
           Event times are shown in Toronto time.
@@ -269,14 +256,15 @@ export function LendingItemsList() {
         <Button
           type="button"
           variant="outline"
-          disabled={isLoading || isSubmitting}
+          disabled={isPending}
           onClick={refreshRequests}
         >
           Refresh
         </Button>
       </div>
 
-      {isLoading && <p role="status">Loading received requests…</p>}
+      {/* Changed: Show progress during an Action or server refresh. */}
+      {isPending && <p role="status">Updating received requests…</p>}
 
       {loadError && <p role="alert">{loadError} Use Refresh to retry.</p>}
 

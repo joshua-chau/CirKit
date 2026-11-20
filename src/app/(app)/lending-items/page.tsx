@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { LendingItemsList } from "@/components/requests/lending-items-list";
+import { mapRequestRecordToResponse } from "@/lib/requests/request-response-mapper";
+import { getReceivedRequests } from "@/lib/requests/request-service";
+import type { LendingItemResponse } from "@/lib/requests/request-types";
 import { requireUser } from "@/server/auth/session";
 
 export const metadata: Metadata = {
@@ -30,9 +33,39 @@ export default function LendingItemsPage() {
 }
 
 async function LendingItemsContent() {
-  await requireUser();
+  const user = await requireUser();
 
-  const content = <LendingItemsList />;
+  // Changed: Load received requests directly in the Server Component.
+  const requests: LendingItemResponse[] = [];
+  let loadError = "";
+
+  try {
+    const records = await getReceivedRequests(user.id);
+
+    for (const record of records) {
+      const response = mapRequestRecordToResponse(record);
+
+      const lendingItem: LendingItemResponse = {
+        ...response,
+        itemName: record.item.itemName,
+        borrowerName: record.borrower.name,
+        groupName: record.group.name,
+      };
+
+      requests.push(lendingItem);
+    }
+  } catch (error) {
+    console.error("Could not load received requests:", error);
+    loadError = "Could not load your received requests.";
+  }
+
+  // Changed: Pass server-loaded records to the interactive list.
+  const content = (
+    <LendingItemsList
+      requests={requests}
+      loadError={loadError}
+    />
+  );
 
   return content;
 }

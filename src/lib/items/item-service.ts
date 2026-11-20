@@ -29,7 +29,7 @@ function withItemImage<T extends { itemId: string; itemImageKey: string | null }
   };
 }
 
-// currentUserId must come from requireUser(); input must pass validation.
+// Changed: currentUserId comes from server session authentication; input is validated.
 export async function createItem(currentUserId: string, input: CreateItemInput) {
   return prisma.item.create({
     data: {
