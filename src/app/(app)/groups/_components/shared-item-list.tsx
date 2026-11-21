@@ -1,8 +1,8 @@
 import type { GroupItemSummary } from "@/server/groups/group-items";
-import {
-  requestItemAction,
-  unlistItemFromGroupAction,
-} from "@/server/groups/group.actions";
+// Changed: Item access changes belong to the Item module.
+import { unshareItemFromGroupAction } from "@/server/items/item.actions";
+// Changed: Request creation belongs to the Request module.
+import { createRequestAction } from "@/server/requests/request.actions";
 import { ActionButton } from "./action-button";
 import { ItemThumbnail } from "./item-thumbnail";
 import { RequestItemButton } from "./request-item-button";
@@ -57,7 +57,7 @@ export function SharedItemList({ groupId, items, viewerId }: Props) {
               </span>
               {mine ? (
                 <ActionButton
-                  action={unlistItemFromGroupAction.bind(
+                  action={unshareItemFromGroupAction.bind(
                     null,
                     groupId,
                     item.itemId,
@@ -80,7 +80,7 @@ export function SharedItemList({ groupId, items, viewerId }: Props) {
               !item.myRequestStatus &&
               item.itemStatus === "AVAILABLE" ? (
                 <RequestItemButton
-                  action={requestItemAction.bind(null, groupId, item.itemId)}
+                  action={createRequestAction.bind(null, groupId, item.itemId)}
                   itemName={item.itemName}
                 />
               ) : null}

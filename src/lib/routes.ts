@@ -5,6 +5,7 @@
 export const LOGIN_PATH = "/login";
 export const SIGNUP_PATH = "/signup";
 export const DEFAULT_LOGIN_REDIRECT = "/dashboard";
+export const LOGIN_RETURN_PATH_HEADER = "x-cirkit-login-return-path";
 
 /** Query-string key used to send the user back to where they were. */
 export const REDIRECT_PARAM = "redirect";

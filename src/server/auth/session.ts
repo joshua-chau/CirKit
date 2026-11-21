@@ -5,7 +5,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
-import { LOGIN_PATH } from "@/lib/routes";
+import { LOGIN_PATH, LOGIN_RETURN_PATH_HEADER, loginUrlFor } from "@/lib/routes";
 
 /**
  * The real authentication check. Validates the session cookie against the
@@ -31,7 +31,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 }
 
 /**
- * Returns the logged-in user, or redirects to /login.
+ * Returns the logged-in user, or redirects to /login with any return path supplied by the proxy.
  *
  * Call this at the top of EVERY protected page, Server Action and route
  * handler. proxy.ts only checks that a cookie exists; this is the check that
@@ -40,7 +40,8 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 export async function requireUser(): Promise<AuthUser> {
   const session = await getSession();
   if (!session) {
-    redirect(LOGIN_PATH);
+    const returnPath = (await headers()).get(LOGIN_RETURN_PATH_HEADER);
+    redirect(returnPath ? loginUrlFor(returnPath) : LOGIN_PATH);
   }
   return session.user;
 }

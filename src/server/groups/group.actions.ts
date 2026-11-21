@@ -6,11 +6,6 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { ItemError } from "@/lib/items/item-errors";
-import { createItemAccess, deleteItemAccess } from "@/lib/items/item-service";
-import { RequestError } from "@/lib/requests/request-errors";
-import { createRequest } from "@/lib/requests/request-service";
-import { validateCreateRequestInput } from "@/lib/requests/request-validation";
 import { groupInputSchema, inviteInputSchema } from "@/lib/validation/group.schema";
 import { toFieldErrors, type FieldErrors } from "@/lib/validation/auth.schema";
 import { requireUser } from "@/server/auth/session";
@@ -195,75 +190,5 @@ export async function declineInvitationAction(token: string): Promise<ActionResu
   redirect("/groups");
 }
 
-// ---------------------------------------------------------------- items
-// Listing rules (owner only, member only, not archived) live in the items
-// module; these actions only translate its errors for the group page.
-
-async function runItem(fn: () => Promise<unknown>): Promise<ActionResult> {
-  try {
-    await fn();
-    return { ok: true };
-  } catch (error) {
-    if (error instanceof ItemError) return { ok: false, error: error.message };
-    throw error;
-  }
-}
-
-export async function listItemInGroupAction(
-  groupId: string,
-  _prev: ActionResult | null,
-  formData: FormData,
-): Promise<ActionResult> {
-  const user = await requireUser();
-  const itemId = id.safeParse(formData.get("itemId"));
-  if (!id.safeParse(groupId).success || !itemId.success) {
-    return { ok: false, error: "Choose an item to list." };
-  }
-  const result = await runItem(() => createItemAccess(user.id, itemId.data, groupId));
-  if (result.ok) refresh();
-  return result;
-}
-
-export async function unlistItemFromGroupAction(groupId: string, itemId: string): Promise<ActionResult> {
-  const user = await requireUser();
-  if (!id.safeParse(groupId).success || !id.safeParse(itemId).success) return invalid();
-  const result = await runItem(() => deleteItemAccess(user.id, itemId, groupId));
-  if (result.ok) refresh();
-  return result;
-}
-
-// ------------------------------------------------------------- requests
-// Borrowing rules (member of the group, item shared here, not your own,
-// not archived or borrowed, valid dates) live in the requests module.
-
-export async function requestItemAction(
-  groupId: string,
-  itemId: string,
-  _prev: ActionResult | null,
-  formData: FormData,
-): Promise<ActionResult> {
-  const user = await requireUser();
-  try {
-    const input = validateCreateRequestInput({
-      itemId,
-      groupId,
-      requestStartDate: formData.get("requestStartDate") ?? "",
-      requestEndDate: formData.get("requestEndDate") ?? "",
-    });
-    await createRequest(user.id, input);
-  } catch (error) {
-    if (error instanceof RequestError) return { ok: false, error: friendlyRequestError(error.message) };
-    throw error;
-  }
-  refresh();
-  return { ok: true };
-}
-
-/** The validator's messages name API fields; reword those for the form. */
-function friendlyRequestError(message: string): string {
-  return message
-    .replace("requestStartDate", "Start date")
-    .replace("requestEndDate", "End date")
-    .replace("must use YYYY-MM-DD format", "is required")
-    .replace("must be a string", "is required");
-}
+// Changed: Item sharing now belongs to src/server/items/item.actions.ts.
+// Changed: Request creation now belongs to src/server/requests/request.actions.ts.
