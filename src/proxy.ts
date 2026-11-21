@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
-import { isAuthRoute, loginUrlFor } from "@/lib/routes";
+import { isAuthRoute, LOGIN_RETURN_PATH_HEADER, loginUrlFor } from "@/lib/routes";
 
 /**
  * Optimistic route guard (Next.js 16 "proxy", formerly middleware).
@@ -29,7 +29,21 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(loginUrlFor(`${pathname}${search}`), request.url));
   }
 
-  return NextResponse.next();
+  const preserveReturnPath = pathname === "/borrowing-items" || pathname === "/lending-items";
+  if (!preserveReturnPath && !request.headers.has(LOGIN_RETURN_PATH_HEADER)) {
+    return NextResponse.next();
+  }
+
+  const requestHeaders = new Headers(request.headers);
+  // Keep the redirect destination tied to the URL even when a stale cookie reaches the page.
+  requestHeaders.delete(LOGIN_RETURN_PATH_HEADER);
+  if (preserveReturnPath) {
+    const returnUrl = request.nextUrl.clone();
+    returnUrl.searchParams.delete("_rsc");
+    requestHeaders.set(LOGIN_RETURN_PATH_HEADER, `${returnUrl.pathname}${returnUrl.search}`);
+  }
+
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {
