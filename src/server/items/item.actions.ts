@@ -21,7 +21,7 @@ import {
 } from "@/lib/items/item-validation";
 import { ImageValidationError } from "@/lib/image-validation";
 import { StorageError } from "@/lib/storage";
-import { getCurrentUser } from "@/server/auth/session";
+import { getCurrentUser, requireUser } from "@/server/auth/session";
 
 // Added: Return expected failures to interactive item controls.
 type ItemActionFailure = {
@@ -138,11 +138,7 @@ export async function shareItemWithGroupAction(
   _previousState: ItemAccessActionResult | null,
   formData: FormData,
 ): Promise<ItemAccessActionResult> {
-  const user = await getCurrentUser();
-  if (user === null) {
-    const failure: ItemActionFailure = { ok: false, code: "UNAUTHENTICATED", error: "Please sign in to continue." };
-    return failure;
-  }
+  const user = await requireUser();
   try {
     requireItemForm(formData);
     const validatedGroupId = validateActionIdentifier(groupId, "Group ID");
@@ -164,11 +160,7 @@ export async function unshareItemFromGroupAction(
   groupId: string,
   itemId: string,
 ): Promise<ItemAccessActionResult> {
-  const user = await getCurrentUser();
-  if (user === null) {
-    const failure: ItemActionFailure = { ok: false, code: "UNAUTHENTICATED", error: "Please sign in to continue." };
-    return failure;
-  }
+  const user = await requireUser();
   try {
     const validatedGroupId = validateActionIdentifier(groupId, "Group ID");
     const validatedItemId = validateActionIdentifier(itemId);
