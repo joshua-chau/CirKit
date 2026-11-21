@@ -18,17 +18,18 @@ const formatter = new Intl.DateTimeFormat("en-CA", {
   year: "numeric", month: "short", day: "numeric", timeZone: "UTC",
 });
 
-/** Changed: Render owner-scoped records supplied by the Server Component page. */
-export function ItemRequests({ requests }: { requests: ReceivedItemRequest[] }) {
+/** Render owner-scoped records. A null list means the history could not load. */
+export function ItemRequests({ requests }: { requests: ReceivedItemRequest[] | null }) {
   const section = (
     <section aria-label="Received requests" className="mt-8 border-t pt-6">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">Received requests</h2>
         <ItemRefreshButton label="Refresh requests" />
       </div>
-      {requests.length === 0 && <p className="mt-4 text-muted-foreground">No requests for this item yet.</p>}
+      {requests === null && <p role="alert" className="mt-4 text-sm text-destructive">Unable to load requests.</p>}
+      {requests?.length === 0 && <p className="mt-4 text-muted-foreground">No requests for this item yet.</p>}
       <ul className="mt-4 space-y-3">
-        {requests.map((request) => {
+        {requests?.map((request) => {
           const requestPath = "/lending-items?requestId=" + encodeURIComponent(request.requestId);
           const startDate = new Date(request.requestStartDate + "T00:00:00Z");
           const endDate = new Date(request.requestEndDate + "T00:00:00Z");

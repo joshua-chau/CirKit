@@ -13,7 +13,6 @@ import { mapItemToView } from "@/server/items/item-view";
 
 type Props = { params: Promise<{ itemId: string }> };
 
-// Changed: Read the item and received requests together on the server.
 export default function ItemPage({ params }: Props) {
   const page = (
     <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
@@ -31,10 +30,8 @@ async function ItemContent({ params }: Props) {
   const user = await requireUser();
   const { itemId } = await params;
   let record;
-  let requestRecords;
   try {
     record = await getMyItem(user.id, itemId);
-    requestRecords = await getReceivedItemRequests(user.id, itemId);
   } catch (error) {
     if (error instanceof ItemError) {
       if (error.code === "NOT_FOUND" || error.code === "FORBIDDEN") {
@@ -52,14 +49,16 @@ async function ItemContent({ params }: Props) {
     return failure;
   }
   const item = mapItemToView(record);
-  const requests: ReceivedItemRequest[] = [];
-  for (const requestRecord of requestRecords) {
-    const response = mapRequestRecordToResponse(requestRecord);
-    requests.push({
-      ...response,
+  let requests: ReceivedItemRequest[] | null = null;
+  try {
+    const requestRecords = await getReceivedItemRequests(user.id, itemId);
+    requests = requestRecords.map((requestRecord) => ({
+      ...mapRequestRecordToResponse(requestRecord),
       borrowerName: requestRecord.borrower.name,
       groupName: requestRecord.group.name,
-    });
+    }));
+  } catch (error) {
+    console.error("Could not load received requests for the item:", error);
   }
   let availability = "Available";
   if (item.itemStatus === "BORROWED") {
