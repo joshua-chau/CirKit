@@ -3,6 +3,7 @@
 import "server-only";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import {
   RequestError,
@@ -17,6 +18,7 @@ import {
   returnItem,
 } from "@/lib/requests/request-service";
 import { validateCreateRequestInput } from "@/lib/requests/request-validation";
+import { loginUrlFor } from "@/lib/routes";
 import { getCurrentUser, requireUser } from "@/server/auth/session";
 
 // Changed: Include an expired session in the shared action failure result.
@@ -70,7 +72,10 @@ async function runBorrowerAction(
   requestId: string,
   action: BorrowerAction,
 ): Promise<RequestActionResult> {
-  const user = await requireUser();
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect(loginUrlFor("/borrowing-items"));
+  }
 
   if (typeof requestId !== "string") {
     const result: RequestActionResult = {
