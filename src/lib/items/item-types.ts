@@ -25,3 +25,10 @@ export interface ItemDetails {
 export interface ItemSummary extends ItemDetails {
   activeRequestCount: number;
 }
+
+export interface ItemSharingGroup {
+  groupId: string;
+  groupName: string;
+  isMember: boolean;
+  isShared: boolean;
+}

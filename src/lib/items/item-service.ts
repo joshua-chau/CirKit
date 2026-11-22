@@ -5,7 +5,7 @@ import type { CreateItemInput, UpdateItemInput } from "@/lib/items/item-validati
 import type { Item } from "@/generated/prisma/client";
 import { ItemError } from "@/lib/items/item-errors";
 import { uploadImage, readImage, deleteImage } from "@/lib/storage";
-import type { ItemFilters } from "@/lib/items/item-types";
+import type { ItemFilters, ItemSharingGroup } from "@/lib/items/item-types";
 
 // Expose listing data without including the owner's account or other relations.
 const itemSelect = {
@@ -154,6 +154,33 @@ function requireItemOwner(item: { ownerId: string } | null | undefined, userId: 
   if (item.ownerId !== userId) {
     throw new ItemError("FORBIDDEN", "Only the item owner can manage this item.");
   }
+}
+
+// Include existing grants outside current memberships so owners can revoke them.
+export async function getItemSharingGroups(currentUserId: string, itemId: string): Promise<ItemSharingGroup[]> {
+  const item = await prisma.item.findUnique({ where: { itemId }, select: { ownerId: true } });
+  requireItemOwner(item, currentUserId);
+  const groups = await prisma.group.findMany({
+    where: {
+      OR: [
+        { members: { some: { userId: currentUserId } } },
+        { itemAccesses: { some: { itemId } } },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      members: { where: { userId: currentUserId }, select: { id: true }, take: 1 },
+      itemAccesses: { where: { itemId }, select: { itemAccessId: true }, take: 1 },
+    },
+    orderBy: [{ name: "asc" }, { id: "asc" }],
+  });
+  return groups.map(group => ({
+    groupId: group.id,
+    groupName: group.name,
+    isMember: group.members.length > 0,
+    isShared: group.itemAccesses.length > 0,
+  }));
 }
 
 export async function getMyItem(currentUserId: string, itemId: string) {
