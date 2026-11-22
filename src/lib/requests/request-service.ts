@@ -6,6 +6,7 @@ import type {
 } from "@/generated/prisma/client";
 import {
   ItemStatus,
+  NotificationType,
   RequestStatus,
 } from "@/generated/prisma/enums";
 import prisma from "@/lib/prisma";
@@ -14,6 +15,7 @@ import { isRequestStartDateInPast } from "@/lib/requests/request-dates";
 import type {
   ValidatedCreateRequestInput,
 } from "@/lib/requests/request-types";
+import { publishNotificationChanged } from "@/server/notifications/notification-events";
 
 /**
  * Changed: Shared business logic for UI Server Actions and retained HTTP APIs.
@@ -479,10 +481,19 @@ export async function approveRequest(
         },
       });
 
+      await transaction.notification.create({
+        data: {
+          recipientId: updatedRequest.borrowerId,
+          type: NotificationType.REQUEST_APPROVED,
+          requestId: updatedRequest.requestId,
+        },
+      });
+
       return updatedRequest;
     },
   );
 
+  publishNotificationChanged(approvedRequest.borrowerId);
   return approvedRequest;
 }
 
