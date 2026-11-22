@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -55,18 +55,21 @@ async function GroupContent({ params }: Props) {
   const user = await requireUser();
 
   let group;
+  let invitations;
+  let items;
+  let listable;
   try {
     group = await getGroupDetail(groupId, user.id);
+    [invitations, items] = await Promise.all([
+      group.viewer.canInvite ? getPendingGroupInvitations(groupId, user.id) : [],
+      getSharedItemsForGroup(groupId, user.id),
+    ]);
+    listable = await getListableItems(user.id, items);
   } catch (error) {
-    // Non-members get a 404 so they can't tell whether the group exists.
-    if (error instanceof NotFoundError) notFound();
+    // Missing groups and lost membership both return to the user's own groups.
+    if (error instanceof NotFoundError) redirect("/groups");
     throw error;
   }
-  const [invitations, items] = await Promise.all([
-    group.viewer.canInvite ? getPendingGroupInvitations(groupId, user.id) : [],
-    getSharedItemsForGroup(groupId, user.id),
-  ]);
-  const listable = await getListableItems(user.id, items);
   const { viewer } = group;
 
   return (
@@ -106,7 +109,7 @@ async function GroupContent({ params }: Props) {
             action={leaveGroupAction.bind(null, group.id)}
             pendingLabel="Leaving…"
             errorToastTitle="Couldn’t leave group"
-            confirmMessage={`Leave "${group.name}"? Your pending requests in this group will be declined and your items will stop being shared with it.`}
+            confirmMessage={`Leave "${group.name}"? Your pending borrowing requests will be cancelled, pending requests for your items will be declined, and your items will stop being shared with this group.`}
             variant="destructive"
           >
             Exit group

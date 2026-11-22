@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import {
   Card,
@@ -49,7 +49,7 @@ async function SettingsContent({ params }: Props) {
   try {
     group = await getGroupDetail(groupId, user.id);
   } catch (error) {
-    if (error instanceof NotFoundError) notFound();
+    if (error instanceof NotFoundError) redirect("/groups");
     throw error;
   }
   // Non-owners get a 404 too; every action re-checks ownership on the server.
@@ -104,9 +104,9 @@ async function SettingsContent({ params }: Props) {
         <CardHeader>
           <CardTitle>Manage members</CardTitle>
           <CardDescription>
-            Removing a member declines their pending requests in this group and
-            stops sharing their items here. It&apos;s blocked while they have an
-            approved or ongoing borrow in this group.
+            Removing a member cancels their pending borrowing requests, declines
+            pending requests for their items, and stops sharing their items here.
+            It&apos;s blocked while they have an approved or ongoing borrow in this group.
           </CardDescription>
         </CardHeader>
         <CardContent>
