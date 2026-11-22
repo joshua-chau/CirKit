@@ -5,6 +5,7 @@ import type { CreateItemInput, UpdateItemInput } from "@/lib/items/item-validati
 import type { Item } from "@/generated/prisma/client";
 import { ItemError } from "@/lib/items/item-errors";
 import { uploadImage, readImage, deleteImage } from "@/lib/storage";
+import type { ItemFilters } from "@/lib/items/item-types";
 
 // Expose listing data without including the owner's account or other relations.
 const itemSelect = {
@@ -45,11 +46,14 @@ export async function createItem(currentUserId: string, input: CreateItemInput) 
 }
 
 // Keep the My Items and Archived Items lists separate, scoped to their owner.
-export async function getMyItems(currentUserId: string, archived = false) {
+export async function getMyItems(currentUserId: string, archived = false, filters: ItemFilters = {}) {
   return prisma.item.findMany({
     where: {
       ownerId: currentUserId,
       itemArchivedAt: archived ? { not: null } : null,
+      itemCategory: filters.category,
+      itemCondition: filters.condition,
+      itemStatus: filters.availability,
     },
     orderBy: [{ itemCreatedAt: "desc" }, { itemId: "desc" }],
     select: {

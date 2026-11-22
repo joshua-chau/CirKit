@@ -9,9 +9,8 @@ import { Label } from "@/components/ui/label";
 import { ItemImagePicker } from "@/components/items/item-image-picker";
 import { loginUrlFor } from "@/lib/routes";
 import { createItemAction, setItemImageAction } from "@/server/items/item.actions";
+import { ITEM_CATEGORIES as categories, ITEM_CONDITIONS as conditions } from "@/lib/items/item-types";
 
-const categories = ["Power tools", "Hand tools", "Home & kitchen", "Garden & outdoor", "Electronics", "Sports & recreation", "Other"];
-const conditions = ["Like new", "Good", "Normal", "Poor"];
 const selectClassName = "h-9 w-full min-w-0 rounded-lg border border-input bg-background px-2.5 py-1 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50";
 
 /** Added: Create once, then retry photo upload independently after a partial failure. */
