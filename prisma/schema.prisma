@@ -247,6 +247,10 @@ model Request {
 
 enum NotificationType {
   REQUEST_APPROVED
+  REQUEST_CREATED
+  REQUEST_DECLINED
+  REQUEST_CANCELLED
+  ITEM_RETURNED
 }
 
 model Notification {

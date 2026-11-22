@@ -1,8 +1,18 @@
 import "server-only";
 
+import type { Prisma } from "@/generated/prisma/client";
+import type { NotificationType } from "@/generated/prisma/enums";
 import prisma from "@/lib/prisma";
 import { NotFoundError } from "@/server/errors";
 import { publishNotificationChanged } from "@/server/notifications/notification-events";
+
+// Use the caller's transaction so the notification and request change commit together.
+export function createRequestNotification(
+  transaction: Prisma.TransactionClient,
+  data: { recipientId: string; type: NotificationType; requestId: string },
+) {
+  return transaction.notification.create({ data });
+}
 
 // Service functions for managing notifications.
 export async function getNotificationsForUser(recipientId: string) {

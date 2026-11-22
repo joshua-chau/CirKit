@@ -16,6 +16,7 @@ import type {
   ValidatedCreateRequestInput,
 } from "@/lib/requests/request-types";
 import { publishNotificationChanged } from "@/server/notifications/notification-events";
+import { createRequestNotification } from "@/server/notifications/notification.service";
 
 /**
  * Changed: Shared business logic for UI Server Actions and retained HTTP APIs.
@@ -50,7 +51,7 @@ export async function createRequest(
   currentUserId: string,
   input: ValidatedCreateRequestInput,
 ): Promise<RequestRecord> {
-  const createdRequest = await prisma.$transaction(
+  const { request: createdRequest, ownerId } = await prisma.$transaction(
     async (transaction) => {
       // Tagged SQL binds itemId as a parameter rather than SQL text.
       // Lock the item before checking availability or creating a request.
@@ -166,10 +167,17 @@ export async function createRequest(
         },
       });
 
-      return request;
+      await createRequestNotification(transaction, {
+        recipientId: item.ownerId,
+        type: NotificationType.REQUEST_CREATED,
+        requestId: request.requestId,
+      });
+
+      return { request, ownerId: item.ownerId };
     },
   );
 
+  publishNotificationChanged(ownerId);
   return createdRequest;
 }
 
@@ -342,7 +350,7 @@ export async function approveRequest(
   currentUserId: string,
   requestId: string,
 ): Promise<RequestRecord> {
-  const approvedRequest = await prisma.$transaction(
+  const { approvedRequest, declinedRequests } = await prisma.$transaction(
     async (transaction) => {
       // First locate the item associated with this request.
       const requestReference = await transaction.request.findUnique({
@@ -459,7 +467,7 @@ export async function approveRequest(
 
       // Reject all other pending requests across every source group.
       // Date overlap is not considered in the simplified first version.
-      await transaction.request.updateMany({
+      const declinedRequests = await transaction.request.updateManyAndReturn({
         where: {
           itemId: item.itemId,
           requestId: {
@@ -470,6 +478,7 @@ export async function approveRequest(
         data: {
           requestStatus: RequestStatus.DECLINED,
         },
+        select: { requestId: true, borrowerId: true },
       });
 
       await transaction.item.update({
@@ -481,19 +490,32 @@ export async function approveRequest(
         },
       });
 
-      await transaction.notification.create({
-        data: {
-          recipientId: updatedRequest.borrowerId,
-          type: NotificationType.REQUEST_APPROVED,
-          requestId: updatedRequest.requestId,
-        },
+      await createRequestNotification(transaction, {
+        recipientId: updatedRequest.borrowerId,
+        type: NotificationType.REQUEST_APPROVED,
+        requestId: updatedRequest.requestId,
       });
 
-      return updatedRequest;
+      for (const declinedRequest of declinedRequests) {
+        await createRequestNotification(transaction, {
+          recipientId: declinedRequest.borrowerId,
+          type: NotificationType.REQUEST_DECLINED,
+          requestId: declinedRequest.requestId,
+        });
+      }
+
+      return { approvedRequest: updatedRequest, declinedRequests };
     },
   );
 
-  publishNotificationChanged(approvedRequest.borrowerId);
+  const recipientIds = new Set([
+    approvedRequest.borrowerId,
+    ...declinedRequests.map((request) => request.borrowerId),
+  ]);
+  for (const recipientId of recipientIds) {
+    publishNotificationChanged(recipientId);
+  }
+
   return approvedRequest;
 }
 
@@ -589,10 +611,17 @@ export async function declineRequest(
         },
       });
 
+      await createRequestNotification(transaction, {
+        recipientId: updatedRequest.borrowerId,
+        type: NotificationType.REQUEST_DECLINED,
+        requestId: updatedRequest.requestId,
+      });
+
       return updatedRequest;
     },
   );
 
+  publishNotificationChanged(declinedRequest.borrowerId);
   return declinedRequest;
 }
 
@@ -615,7 +644,7 @@ export async function declineAllPendingRequests(
   currentUserId: string,
   itemId: string,
 ): Promise<number> {
-  const declinedCount = await prisma.$transaction(
+  const declinedRequests = await prisma.$transaction(
     async (transaction) => {
       // Lock the item before checking ownership and updating its requests.
       const items = await transaction.$queryRaw<Item[]>`
@@ -642,7 +671,7 @@ export async function declineAllPendingRequests(
       }
 
       // Do not filter by group: every current Pending request is included.
-      const result = await transaction.request.updateMany({
+      const requests = await transaction.request.updateManyAndReturn({
         where: {
           itemId: itemId,
           requestStatus: RequestStatus.PENDING,
@@ -650,16 +679,28 @@ export async function declineAllPendingRequests(
         data: {
           requestStatus: RequestStatus.DECLINED,
         },
+        select: { requestId: true, borrowerId: true },
       });
 
-      // Zero matches is a successful operation, not a missing-record error.
-      const count = result.count;
+      for (const request of requests) {
+        await createRequestNotification(transaction, {
+          recipientId: request.borrowerId,
+          type: NotificationType.REQUEST_DECLINED,
+          requestId: request.requestId,
+        });
+      }
 
-      return count;
+      return requests;
     },
   );
 
-  return declinedCount;
+  // Each changed request gets a notification; each recipient needs one refresh signal.
+  const recipientIds = new Set(declinedRequests.map((request) => request.borrowerId));
+  for (const recipientId of recipientIds) {
+    publishNotificationChanged(recipientId);
+  }
+
+  return declinedRequests.length;
 }
 
 /**
@@ -679,7 +720,7 @@ export async function cancelRequest(
   currentUserId: string,
   requestId: string,
 ): Promise<RequestRecord> {
-  const cancelledRequest = await prisma.$transaction(
+  const { request: cancelledRequest, ownerId } = await prisma.$transaction(
     async (transaction) => {
       const requestReference = await transaction.request.findUnique({
         where: {
@@ -711,6 +752,8 @@ export async function cancelRequest(
           "The requested item was not found.",
         );
       }
+
+      const ownerId = items[0].ownerId;
 
       // Re-read the request after waiting for the Item lock.
       const request = await transaction.request.findUnique({
@@ -750,10 +793,17 @@ export async function cancelRequest(
         },
       });
 
-      return updatedRequest;
+      await createRequestNotification(transaction, {
+        recipientId: ownerId,
+        type: NotificationType.REQUEST_CANCELLED,
+        requestId: updatedRequest.requestId,
+      });
+
+      return { request: updatedRequest, ownerId };
     },
   );
 
+  publishNotificationChanged(ownerId);
   return cancelledRequest;
 }
 
@@ -775,7 +825,7 @@ export async function returnItem(
   currentUserId: string,
   requestId: string,
 ): Promise<RequestRecord> {
-  const completedRequest = await prisma.$transaction(
+  const { request: completedRequest, ownerId } = await prisma.$transaction(
     async (transaction) => {
       const requestReference = await transaction.request.findUnique({
         where: {
@@ -867,9 +917,16 @@ export async function returnItem(
         },
       });
 
-      return updatedRequest;
+      await createRequestNotification(transaction, {
+        recipientId: item.ownerId,
+        type: NotificationType.ITEM_RETURNED,
+        requestId: updatedRequest.requestId,
+      });
+
+      return { request: updatedRequest, ownerId: item.ownerId };
     },
   );
 
+  publishNotificationChanged(ownerId);
   return completedRequest;
 }

@@ -13,6 +13,10 @@ import type { NotificationList } from "@/server/notifications/notification.servi
 
 const notificationTitles: Record<NotificationType, string> = {
   REQUEST_APPROVED: "Borrowing request approved",
+  REQUEST_CREATED: "New borrowing request received",
+  REQUEST_DECLINED: "Borrowing request declined",
+  REQUEST_CANCELLED: "Borrowing request cancelled",
+  ITEM_RETURNED: "Borrowed item returned",
 };
 const notificationTime = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" });
 
