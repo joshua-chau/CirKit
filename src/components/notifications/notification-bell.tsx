@@ -27,6 +27,7 @@ export function NotificationBell() {
   const [loadError, setLoadError] = useState(false);
   const [readError, setReadError] = useState(false);
   const [pendingReadId, setPendingReadId] = useState<string | null>(null);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
   const [refreshVersion, refreshNotifications] = useReducer((version: number) => version + 1, 0);
   const streamRef = useRef<EventSource | null>(null);
   const hasUnread = (list?.unreadCount ?? 0) > 0;
@@ -91,6 +92,21 @@ export function NotificationBell() {
     }
   }
 
+  async function markAllAsRead() {
+    setMarkingAllRead(true);
+    setReadError(false);
+
+    try {
+      const response = await fetch("/api/notifications/read-all", { method: "PATCH" });
+      if (!response.ok) throw new Error("Could not mark notifications as read.");
+      refreshNotifications();
+    } catch {
+      setReadError(true);
+    } finally {
+      setMarkingAllRead(false);
+    }
+  }
+
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
     if (nextOpen) refreshNotifications();
@@ -111,7 +127,19 @@ export function NotificationBell() {
       <Popover.Portal>
         <Popover.Positioner align="end" sideOffset={8} className="z-20">
           <Popover.Popup className="w-80 max-w-[calc(100vw_-_2rem)] space-y-3 rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg [font-family:var(--font-geist-sans)]">
-            <Popover.Title className="text-sm font-semibold">Notifications</Popover.Title>
+            <div className="flex items-center justify-between gap-3">
+              <Popover.Title className="text-sm font-semibold">Notifications</Popover.Title>
+              <Button
+                type="button"
+                variant="default"
+                size="xs"
+                className="rounded-lg"
+                disabled={!hasUnread || markingAllRead || pendingReadId !== null}
+                onClick={markAllAsRead}
+              >
+                {markingAllRead ? "Marking…" : "Mark all as read"}
+              </Button>
+            </div>
             {loadError && (
               <div className="flex items-center justify-between gap-2">
                 <p role="alert" className="text-sm text-destructive">Could not load notifications.</p>
@@ -120,7 +148,7 @@ export function NotificationBell() {
             )}
             {!loadError && !list && <p role="status" className="text-sm text-muted-foreground">Loading notifications…</p>}
             {list?.notifications.length === 0 && <p className="text-sm text-muted-foreground">No notifications yet.</p>}
-            {readError && <p role="alert" className="text-sm text-destructive">Could not mark the notification as read.</p>}
+            {readError && <p role="alert" className="text-sm text-destructive">Could not mark notifications as read.</p>}
             {!!list?.notifications.length && (
               <ul className="max-h-80 space-y-1 overflow-y-auto">
                 {list.notifications.map((notification) => {
@@ -139,7 +167,7 @@ export function NotificationBell() {
                           unread ? "bg-primary text-primary-foreground hover:bg-primary/90" : "hover:bg-muted",
                         )}
                         onNavigate={(event) => {
-                          if (pendingReadId !== null) {
+                          if (pendingReadId !== null || markingAllRead) {
                             event.preventDefault();
                             return;
                           }

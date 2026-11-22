@@ -52,6 +52,16 @@ export async function getNotificationsForUser(recipientId: string) {
 
 export type NotificationList = Awaited<ReturnType<typeof getNotificationsForUser>>;
 
+// Include older unread notifications beyond the latest 20 shown in the menu.
+export async function markAllNotificationsRead(recipientId: string) {
+  const result = await prisma.notification.updateMany({
+    where: { recipientId, readAt: null },
+    data: { readAt: new Date() },
+  });
+
+  if (result.count > 0) publishNotificationChanged(recipientId);
+}
+
 // Mark a specific notification as read for a recipient.
 export async function markNotificationRead(recipientId: string, notificationId: string) {
   const where = { id: notificationId, recipientId };
