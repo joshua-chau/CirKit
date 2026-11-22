@@ -6,7 +6,7 @@ import prisma from "@/lib/prisma";
 import type { GroupInput } from "@/lib/validation/group.schema";
 import { ConflictError, NotFoundError, ValidationError } from "@/server/errors";
 import { publishNotificationChanged } from "@/server/notifications/notification-events";
-import { createRequestNotification } from "@/server/notifications/notification.service";
+import { createGroupNotification, createRequestNotification } from "@/server/notifications/notification.service";
 import { cleanupGroupImage } from "./group-image";
 import { lockGroup } from "./group.lock";
 import { requireGroupMember, requireGroupOwner } from "./group.permissions";
@@ -152,7 +152,15 @@ export async function removeMember(groupId: string, ownerId: string, memberUserI
     });
     if (!target) throw new NotFoundError("That user is not a member of this group.");
 
-    return detachMember(tx, groupId, memberUserId);
+    const recipientIds = await detachMember(tx, groupId, memberUserId);
+    // The removed member is notified even when no pending requests were affected.
+    await createGroupNotification(tx, {
+      recipientId: memberUserId,
+      type: NotificationType.GROUP_MEMBER_REMOVED,
+      groupId,
+    });
+    recipientIds.add(memberUserId);
+    return recipientIds;
   });
 
   for (const recipientId of recipientIds) {

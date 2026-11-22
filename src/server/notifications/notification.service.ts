@@ -14,6 +14,14 @@ export function createRequestNotification(
   return transaction.notification.create({ data });
 }
 
+// Group notifications do not reference a borrowing request.
+export function createGroupNotification(
+  transaction: Prisma.TransactionClient,
+  data: { recipientId: string; type: "GROUP_INVITED" | "GROUP_MEMBER_REMOVED"; groupId: string },
+) {
+  return transaction.notification.create({ data });
+}
+
 // Service functions for managing notifications.
 export async function getNotificationsForUser(recipientId: string) {
   const [notifications, unreadCount] = await prisma.$transaction(
