@@ -31,6 +31,7 @@ export async function getNotificationsForUser(recipientId: string) {
           request: {
             select: { borrowerId: true, item: { select: { itemName: true } } },
           },
+          group: { select: { name: true } },
         },
       }),
       prisma.notification.count({ where: { recipientId, readAt: null } }),
@@ -39,10 +40,11 @@ export async function getNotificationsForUser(recipientId: string) {
   );
 
   return {
-    notifications: notifications.map(({ request, createdAt, readAt, ...notification }) => ({
+    notifications: notifications.map(({ request, group, createdAt, readAt, ...notification }) => ({
       ...notification,
-      itemName: request.item.itemName,
-      direction: request.borrowerId === recipientId ? "borrowing" : "lending",
+      itemName: request?.item.itemName ?? null,
+      groupName: group?.name ?? null,
+      direction: request ? (request.borrowerId === recipientId ? "borrowing" : "lending") : "group",
       createdAt: createdAt.toISOString(),
       readAt: readAt?.toISOString() ?? null,
     })),

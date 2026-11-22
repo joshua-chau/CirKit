@@ -17,6 +17,8 @@ const notificationTitles: Record<NotificationType, string> = {
   REQUEST_DECLINED: "Borrowing request declined",
   REQUEST_CANCELLED: "Borrowing request cancelled",
   ITEM_RETURNED: "Borrowed item returned",
+  GROUP_INVITED: "Group invitation received",
+  GROUP_MEMBER_REMOVED: "You were removed from a group",
 };
 const notificationTime = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" });
 
@@ -153,9 +155,12 @@ export function NotificationBell() {
               <ul className="max-h-80 space-y-1 overflow-y-auto">
                 {list.notifications.map((notification) => {
                   const unread = notification.readAt === null;
-                  const href = notification.direction === "lending"
-                    ? `/lending-items?requestId=${encodeURIComponent(notification.requestId)}`
-                    : "/borrowing-items";
+                  const groupNotification = notification.type === "GROUP_INVITED" || notification.type === "GROUP_MEMBER_REMOVED";
+                  const href = groupNotification
+                    ? "/groups"
+                    : notification.direction === "lending" && notification.requestId
+                      ? `/lending-items?requestId=${encodeURIComponent(notification.requestId)}`
+                      : "/borrowing-items";
 
                   return (
                     <li key={notification.id}>
@@ -181,7 +186,9 @@ export function NotificationBell() {
                       >
                         {unread && <span className="sr-only">Unread</span>}
                         <p className="font-medium">{notificationTitles[notification.type]}</p>
-                        <p className="break-words">{notification.itemName}</p>
+                        <p className="break-words">
+                          {groupNotification ? (notification.groupName ?? "Group no longer available") : notification.itemName}
+                        </p>
                         <time dateTime={notification.createdAt} className="block text-xs opacity-75">
                           {notificationTime.format(new Date(notification.createdAt))}
                         </time>

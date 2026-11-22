@@ -132,6 +132,7 @@ model Group {
 
   itemAccesses ItemAccess[]
   requests     Request[]
+  notifications Notification[]
 
 
   @@map("group")
@@ -251,18 +252,23 @@ enum NotificationType {
   REQUEST_DECLINED
   REQUEST_CANCELLED
   ITEM_RETURNED
+  GROUP_INVITED
+  GROUP_MEMBER_REMOVED
 }
 
 model Notification {
   id          String           @id @default(cuid())
   recipientId String
   type        NotificationType
-  requestId   String
+  requestId   String?
+  groupId     String?
   createdAt   DateTime         @default(now())
   readAt      DateTime?
 
   recipient User    @relation(fields: [recipientId], references: [id])
-  request   Request @relation(fields: [requestId], references: [requestId])
+  request   Request? @relation(fields: [requestId], references: [requestId], onDelete: Restrict)
+  // Group deletion keeps the notification readable without blocking deletion.
+  group     Group?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
   @@index([recipientId, createdAt, id])
   @@index([recipientId, readAt])
