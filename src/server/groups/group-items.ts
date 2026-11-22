@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { getItemsByGroupId, getMyItems } from "@/lib/items/item-service";
 import { getMyRequests } from "@/lib/requests/request-service";
 import { requireGroupMember } from "./group.permissions";
+import type { ItemFilters } from "@/lib/items/item-types";
 
 /**
  * The group page's link to the items module. The items module owns the
@@ -32,10 +33,10 @@ export type GroupItemSummary = Pick<
  * Items shared with a group, for its members, newest first. Throws
  * NotFoundError for non-members (so the page can 404).
  */
-export async function getSharedItemsForGroup(groupId: string, userId: string): Promise<GroupItemSummary[]> {
+export async function getSharedItemsForGroup(groupId: string, userId: string, filters: ItemFilters = {}): Promise<GroupItemSummary[]> {
   await requireGroupMember(groupId, userId);
   const [items, myRequests] = await Promise.all([
-    getItemsByGroupId(userId, groupId),
+    getItemsByGroupId(userId, groupId, filters),
     getMyRequests(userId),
   ]);
 
@@ -72,9 +73,17 @@ export async function getSharedItemsForGroup(groupId: string, userId: string): P
 }
 
 /** The viewer's active items that aren't listed in this group yet. */
-export async function getListableItems(userId: string, sharedItems: GroupItemSummary[]) {
-  const listed = new Set(sharedItems.map((item) => item.itemId));
-  const mine = await getMyItems(userId);
+export async function getListableItems(userId: string, groupId: string) {
+  await requireGroupMember(groupId, userId);
+  // Check all existing grants, even when the shared-item list is filtered.
+  const [mine, accesses] = await Promise.all([
+    getMyItems(userId),
+    prisma.itemAccess.findMany({
+      where: { groupId, item: { ownerId: userId } },
+      select: { itemId: true },
+    }),
+  ]);
+  const listed = new Set(accesses.map(access => access.itemId));
   return {
     hasItems: mine.length > 0,
     items: mine

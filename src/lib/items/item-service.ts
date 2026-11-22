@@ -85,7 +85,7 @@ export async function getReceivedItemRequests(currentUserId: string, itemId: str
 }
 
 // Group browsing follows ItemAccess rather than item ownership.
-export async function getItemsByGroupId(currentUserId: string, groupId: string) {
+export async function getItemsByGroupId(currentUserId: string, groupId: string, filters: ItemFilters = {}) {
   return prisma.$transaction(async transaction => {
     const membership = await transaction.groupMember.findUnique({
       where: { groupId_userId: { groupId, userId: currentUserId } },
@@ -95,7 +95,13 @@ export async function getItemsByGroupId(currentUserId: string, groupId: string) 
       throw new ItemError("FORBIDDEN", "You must belong to this group to view its items.");
     }
     return transaction.item.findMany({
-      where: { itemArchivedAt: null, itemAccesses: { some: { groupId } } },
+      where: {
+        itemArchivedAt: null,
+        itemAccesses: { some: { groupId } },
+        itemCategory: filters.category,
+        itemCondition: filters.condition,
+        itemStatus: filters.availability,
+      },
       orderBy: [{ itemCreatedAt: "desc" }, { itemId: "desc" }],
       select: itemSelect,
     }).then(items => items.map(withItemImage));

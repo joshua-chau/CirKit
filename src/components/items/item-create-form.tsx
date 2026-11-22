@@ -21,6 +21,7 @@ export function ItemCreateForm() {
   const [error, setError] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [createdItemId, setCreatedItemId] = useState<string | null>(null);
+  const [pickerVersion, setPickerVersion] = useState(0);
 
   function goToLogin(): void {
     const loginPath = loginUrlFor("/myitems/new");
@@ -32,7 +33,8 @@ export function ItemCreateForm() {
     if (pending || busy.current) {
       return;
     }
-    const formData = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const formData = new FormData(formElement);
     busy.current = true;
     setError("");
     startTransition(async () => {
@@ -66,6 +68,13 @@ export function ItemCreateForm() {
         }
         const itemPath = "/myitems/" + encodeURIComponent(savedId);
         router.push(itemPath);
+        // Cached navigation may preserve this form. Clear it only after success;
+        // upload failures must keep savedId so retrying cannot create duplicates.
+        formElement.reset();
+        setCreatedItemId(null);
+        setPhoto(null);
+        setError("");
+        setPickerVersion(version => version + 1);
       } catch {
         let message = "Could not confirm the save. Check My Items before retrying.";
         if (savedId !== null) {
@@ -121,7 +130,7 @@ export function ItemCreateForm() {
         </div>
         <p className="text-sm text-muted-foreground">New items are automatically marked as Available.</p>
       </fieldset>
-      <div className="mt-6"><ItemImagePicker file={photo} onChange={setPhoto} disabled={pending} /></div>
+      <div className="mt-6"><ItemImagePicker key={pickerVersion} file={photo} onChange={setPhoto} disabled={pending} /></div>
       {createdItemId !== null && <p role="status" className="mt-4 text-sm">Your item is saved. Select a photo and retry, or clear the selection to continue without one.</p>}
       {error && <p role="alert" className="mt-6 text-sm text-destructive">{error}</p>}
       <div className="mt-6 flex items-center gap-4">
