@@ -60,22 +60,6 @@ async function GroupContent({ params, searchParams }: Props) {
   const { groupId } = await params;
   const user = await requireUser();
 
-  let group;
-  let invitations;
-  let items;
-  let listable;
-  try {
-    group = await getGroupDetail(groupId, user.id);
-    [invitations, items] = await Promise.all([
-      group.viewer.canInvite ? getPendingGroupInvitations(groupId, user.id) : [],
-      getSharedItemsForGroup(groupId, user.id),
-    ]);
-    listable = await getListableItems(user.id, items);
-  } catch (error) {
-    // Missing groups and lost membership both return to the user's own groups.
-    if (error instanceof NotFoundError) redirect("/groups");
-    throw error;
-  }
   let filters: Filters = {};
   let filterError: string | null = null;
   try {
@@ -85,11 +69,22 @@ async function GroupContent({ params, searchParams }: Props) {
     filterError = error.message;
   }
   const hasFilters = Object.values(filters).some(Boolean);
-  const [invitations, items, listable] = await Promise.all([
-    group.viewer.canInvite ? getPendingGroupInvitations(groupId, user.id) : [],
-    filterError ? Promise.resolve([]) : getSharedItemsForGroup(groupId, user.id, filters),
-    getListableItems(user.id, groupId),
-  ]);
+  let group;
+  let invitations;
+  let items;
+  let listable;
+  try {
+    group = await getGroupDetail(groupId, user.id);
+    [invitations, items, listable] = await Promise.all([
+      group.viewer.canInvite ? getPendingGroupInvitations(groupId, user.id) : [],
+      filterError ? Promise.resolve([]) : getSharedItemsForGroup(groupId, user.id, filters),
+      getListableItems(user.id, groupId),
+    ]);
+  } catch (error) {
+    // Missing groups and lost membership both return to the user's own groups.
+    if (error instanceof NotFoundError) redirect("/groups");
+    throw error;
+  }
   const { viewer } = group;
 
   return (
