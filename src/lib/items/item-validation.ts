@@ -1,3 +1,21 @@
+import { ITEM_CATEGORIES, ITEM_CONDITIONS, type ItemFilters } from "@/lib/items/item-types";
+
+export function validateItemFilters(params: Record<string, string | string[] | undefined>): ItemFilters {
+  function readOption(key: string, options: readonly string[]): string | undefined {
+    const value = params[key];
+    if (value === undefined || value === "") return undefined;
+    if (typeof value !== "string" || !options.includes(value)) {
+      throw new ItemValidationError(`Invalid ${key} filter. Choose one of the listed options.`);
+    }
+    return value;
+  }
+  return {
+    category: readOption("category", ITEM_CATEGORIES),
+    condition: readOption("condition", ITEM_CONDITIONS),
+    availability: readOption("availability", ["AVAILABLE", "BORROWED"]) as ItemFilters["availability"],
+  };
+}
+
 export interface CreateItemInput {
   itemName: string;
   itemDescription: string;

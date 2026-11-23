@@ -33,24 +33,30 @@ import { InviteForm } from "../_components/invite-form";
 import { ListItemForm } from "../_components/list-item-form";
 import { PendingInvitations } from "../_components/pending-invitations";
 import { SharedItemList } from "../_components/shared-item-list";
+import { ItemFilters } from "@/components/items/item-filters";
+import { ItemValidationError, validateItemFilters } from "@/lib/items/item-validation";
+import type { ItemFilters as Filters } from "@/lib/items/item-types";
 
 export const metadata: Metadata = { title: "Group · CirKit" };
 
-type Props = { params: Promise<{ groupId: string }> };
+type Props = {
+  params: Promise<{ groupId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
-export default function GroupPage({ params }: Props) {
+export default function GroupPage({ params, searchParams }: Props) {
   return (
     <Suspense
       fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}
     >
-      <GroupContent params={params} />
+      <GroupContent params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
 const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
 
-async function GroupContent({ params }: Props) {
+async function GroupContent({ params, searchParams }: Props) {
   const { groupId } = await params;
   const user = await requireUser();
 
@@ -70,6 +76,20 @@ async function GroupContent({ params }: Props) {
     if (error instanceof NotFoundError) redirect("/groups");
     throw error;
   }
+  let filters: Filters = {};
+  let filterError: string | null = null;
+  try {
+    filters = validateItemFilters(await searchParams);
+  } catch (error) {
+    if (!(error instanceof ItemValidationError)) throw error;
+    filterError = error.message;
+  }
+  const hasFilters = Object.values(filters).some(Boolean);
+  const [invitations, items, listable] = await Promise.all([
+    group.viewer.canInvite ? getPendingGroupInvitations(groupId, user.id) : [],
+    filterError ? Promise.resolve([]) : getSharedItemsForGroup(groupId, user.id, filters),
+    getListableItems(user.id, groupId),
+  ]);
   const { viewer } = group;
 
   return (
@@ -121,17 +141,21 @@ async function GroupContent({ params }: Props) {
         <CardHeader>
           <CardTitle>Shared items</CardTitle>
           <CardDescription>
-            {items.length === 0
+            {filterError ? "Choose valid item filters to view shared items."
+              : hasFilters ? `${items.length} matching ${items.length === 1 ? "item" : "items"} in this group.`
+              : items.length === 0
               ? "No items are shared with this group yet."
               : `${items.length} ${items.length === 1 ? "item is" : "items are"} shared with this group.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <SharedItemList
+          <ItemFilters filters={filters} />
+          {filterError ? <p role="alert" className="text-sm text-destructive">{filterError}</p> : <SharedItemList
             groupId={group.id}
             items={items}
             viewerId={viewer.userId}
-          />
+            filtered={hasFilters}
+          />}
           <div className={items.length > 0 ? "border-t pt-4" : undefined}>
             <ListItemForm
               action={shareItemWithGroupAction.bind(null, group.id)}

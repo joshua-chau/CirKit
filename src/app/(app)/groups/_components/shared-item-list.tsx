@@ -11,15 +11,18 @@ type Props = {
   groupId: string;
   items: GroupItemSummary[];
   viewerId: string;
+  filtered?: boolean;
 };
 
 /**
  * Items shared with a group. The list scrolls inside its own box (scroll bar
  * on the right) once it is taller than about 60% of the window.
  */
-export function SharedItemList({ groupId, items, viewerId }: Props) {
+export function SharedItemList({ groupId, items, viewerId, filtered = false }: Props) {
   // The card's description already says when nothing is shared.
-  if (items.length === 0) return null;
+  if (items.length === 0) {
+    return filtered ? <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No items match these filters. Try different options or clear the filters.</p> : null;
+  }
 
   return (
     <ul className="scroll-panel max-h-[60vh] divide-y pr-3">

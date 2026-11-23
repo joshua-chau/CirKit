@@ -8,6 +8,7 @@ import { ItemError } from "@/lib/items/item-errors";
 import { uploadImage, readImage, deleteImage } from "@/lib/storage";
 import { publishNotificationChanged } from "@/server/notifications/notification-events";
 import { createRequestNotification } from "@/server/notifications/notification.service";
+import type { ItemFilters, ItemSharingGroup } from "@/lib/items/item-types";
 
 // Expose listing data without including the owner's account or other relations.
 const itemSelect = {
@@ -48,11 +49,14 @@ export async function createItem(currentUserId: string, input: CreateItemInput) 
 }
 
 // Keep the My Items and Archived Items lists separate, scoped to their owner.
-export async function getMyItems(currentUserId: string, archived = false) {
+export async function getMyItems(currentUserId: string, archived = false, filters: ItemFilters = {}) {
   return prisma.item.findMany({
     where: {
       ownerId: currentUserId,
       itemArchivedAt: archived ? { not: null } : null,
+      itemCategory: filters.category,
+      itemCondition: filters.condition,
+      itemStatus: filters.availability,
     },
     orderBy: [{ itemCreatedAt: "desc" }, { itemId: "desc" }],
     select: {
@@ -84,7 +88,7 @@ export async function getReceivedItemRequests(currentUserId: string, itemId: str
 }
 
 // Group browsing follows ItemAccess rather than item ownership.
-export async function getItemsByGroupId(currentUserId: string, groupId: string) {
+export async function getItemsByGroupId(currentUserId: string, groupId: string, filters: ItemFilters = {}) {
   return prisma.$transaction(async transaction => {
     const membership = await transaction.groupMember.findUnique({
       where: { groupId_userId: { groupId, userId: currentUserId } },
@@ -94,7 +98,13 @@ export async function getItemsByGroupId(currentUserId: string, groupId: string) 
       throw new ItemError("FORBIDDEN", "You must belong to this group to view its items.");
     }
     return transaction.item.findMany({
-      where: { itemArchivedAt: null, itemAccesses: { some: { groupId } } },
+      where: {
+        itemArchivedAt: null,
+        itemAccesses: { some: { groupId } },
+        itemCategory: filters.category,
+        itemCondition: filters.condition,
+        itemStatus: filters.availability,
+      },
       orderBy: [{ itemCreatedAt: "desc" }, { itemId: "desc" }],
       select: itemSelect,
     }).then(items => items.map(withItemImage));
@@ -164,6 +174,33 @@ function requireItemOwner(item: { ownerId: string } | null | undefined, userId: 
   if (item.ownerId !== userId) {
     throw new ItemError("FORBIDDEN", "Only the item owner can manage this item.");
   }
+}
+
+// Include existing grants outside current memberships so owners can revoke them.
+export async function getItemSharingGroups(currentUserId: string, itemId: string): Promise<ItemSharingGroup[]> {
+  const item = await prisma.item.findUnique({ where: { itemId }, select: { ownerId: true } });
+  requireItemOwner(item, currentUserId);
+  const groups = await prisma.group.findMany({
+    where: {
+      OR: [
+        { members: { some: { userId: currentUserId } } },
+        { itemAccesses: { some: { itemId } } },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      members: { where: { userId: currentUserId }, select: { id: true }, take: 1 },
+      itemAccesses: { where: { itemId }, select: { itemAccessId: true }, take: 1 },
+    },
+    orderBy: [{ name: "asc" }, { id: "asc" }],
+  });
+  return groups.map(group => ({
+    groupId: group.id,
+    groupName: group.name,
+    isMember: group.members.length > 0,
+    isShared: group.itemAccesses.length > 0,
+  }));
 }
 
 export async function getMyItem(currentUserId: string, itemId: string) {
