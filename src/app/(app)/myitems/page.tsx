@@ -4,7 +4,9 @@ import Image from "next/image";
 import { buttonVariants } from "@/components/ui/button";
 import { ItemRefreshButton } from "@/components/items/item-refresh-button";
 import { getMyItems } from "@/lib/items/item-service";
-import type { ItemSummary } from "@/lib/items/item-types";
+import type { ItemSummary, ItemFilters as Filters } from "@/lib/items/item-types";
+import { ItemFilters } from "@/components/items/item-filters";
+import { ItemValidationError, validateItemFilters } from "@/lib/items/item-validation";
 import { requireUser } from "@/server/auth/session";
 import { mapItemToView } from "@/server/items/item-view";
 
@@ -28,16 +30,22 @@ async function MyItemsContent({ searchParams }: Props) {
   const params = await searchParams;
   const archived = params.archived === "true";
   const items: ItemSummary[] = [];
+  let filters: Filters = {};
   let loadError = "";
   try {
-    const records = await getMyItems(user.id, archived);
+    filters = validateItemFilters(params);
+    const records = await getMyItems(user.id, archived, filters);
     for (const record of records) {
       const item = mapItemToView(record);
       items.push({ ...item, activeRequestCount: record.activeRequestCount });
     }
   } catch (error) {
-    console.error("Could not load owned items:", error);
-    loadError = "Could not load your items. Try again.";
+    if (error instanceof ItemValidationError) {
+      loadError = error.message;
+    } else {
+      console.error("Could not load owned items:", error);
+      loadError = "Could not load your items. Try again.";
+    }
   }
 
   const active: ItemSummary[] = [];
@@ -69,6 +77,18 @@ async function MyItemsContent({ searchParams }: Props) {
     archivedPage = "page";
   }
   const currentClass = buttonVariants({ variant: currentVariant });
+  const filterParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) filterParams.set(key, value);
+  }
+  const hasFilters = filterParams.size > 0;
+  const currentHref = hasFilters ? `/myitems?${filterParams}` : "/myitems";
+  filterParams.set("archived", "true");
+  const archivedHref = `/myitems?${filterParams}`;
+  if (hasFilters) {
+    emptyTitle = "No matching items";
+    emptyDescription = "Try different filters or clear them to see all items in this list.";
+  }
   const archivedClass = buttonVariants({ variant: archivedVariant });
   const addClass = buttonVariants({ variant: "default" });
   const showEmpty = !loadError && items.length === 0;
@@ -81,10 +101,11 @@ async function MyItemsContent({ searchParams }: Props) {
         <Link href="/myitems/new" className={addClass}>Add Item</Link>
       </header>
       <nav aria-label="Item lists" className="mb-6 flex gap-2">
-        <Link href="/myitems" aria-current={currentPage} className={currentClass}>Current</Link>
-        <Link href="/myitems?archived=true" aria-current={archivedPage} className={archivedClass}>Archived</Link>
+        <Link href={currentHref} aria-current={currentPage} className={currentClass}>Current</Link>
+        <Link href={archivedHref} aria-current={archivedPage} className={archivedClass}>Archived</Link>
         <ItemRefreshButton />
       </nav>
+      <ItemFilters filters={filters} />
       {loadError && <p role="alert">{loadError}</p>}
       {showEmpty && (
         <div className="rounded-xl border border-dashed p-12 text-center">

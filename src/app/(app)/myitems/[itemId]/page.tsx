@@ -5,8 +5,10 @@ import { ItemRequests, type ReceivedItemRequest } from "@/components/items/item-
 import { ItemArchiveButton } from "@/components/items/item-archive-button";
 import { ItemPhotoEditor } from "@/components/items/item-photo-editor";
 import { ItemRefreshButton } from "@/components/items/item-refresh-button";
+import { ItemGroupSharing } from "@/components/items/item-group-sharing";
+import type { ItemSharingGroup } from "@/lib/items/item-types";
 import { ItemError } from "@/lib/items/item-errors";
-import { getMyItem, getReceivedItemRequests } from "@/lib/items/item-service";
+import { getMyItem, getReceivedItemRequests, getItemSharingGroups } from "@/lib/items/item-service";
 import { mapRequestRecordToResponse } from "@/lib/requests/request-response-mapper";
 import { requireUser } from "@/server/auth/session";
 import { mapItemToView } from "@/server/items/item-view";
@@ -49,6 +51,12 @@ async function ItemContent({ params }: Props) {
     return failure;
   }
   const item = mapItemToView(record);
+  let sharingGroups: ItemSharingGroup[] | null = null;
+  try {
+    sharingGroups = await getItemSharingGroups(user.id, itemId);
+  } catch (error) {
+    console.error("Could not load item group sharing:", error);
+  }
   let requests: ReceivedItemRequest[] | null = null;
   try {
     const requestRecords = await getReceivedItemRequests(user.id, itemId);
@@ -81,6 +89,7 @@ async function ItemContent({ params }: Props) {
         <h2 id="description-heading" className="text-lg font-semibold">Description</h2>
         <p className="mt-3 whitespace-pre-wrap break-words leading-relaxed">{item.itemDescription}</p>
       </section>
+      <ItemGroupSharing itemId={item.itemId} archived={item.itemArchivedAt !== null} groups={sharingGroups} />
       <ItemRequests requests={requests} />
       {item.itemArchivedAt === null && <ItemArchiveButton item={item} />}
     </article>
