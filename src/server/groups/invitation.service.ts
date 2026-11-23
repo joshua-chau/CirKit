@@ -3,8 +3,11 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 
 import type { Prisma } from "@/generated/prisma/client";
+import { NotificationType } from "@/generated/prisma/enums";
 import prisma from "@/lib/prisma";
 import { ConflictError, ForbiddenError, NotFoundError } from "@/server/errors";
+import { publishNotificationChanged } from "@/server/notifications/notification-events";
+import { createGroupNotification } from "@/server/notifications/notification.service";
 import { canInvite, canManageGroup, requireGroupMember } from "./group.permissions";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -52,7 +55,7 @@ async function requireUnderDailyLimit(tx: Tx, inviterId: string) {
  * group.actions); members can also copy it from the pending list.
  */
 export async function createInvitation(groupId: string, inviterId: string, email: string) {
-  return prisma.$transaction(async (tx) => {
+  const { invitation, recipientId } = await prisma.$transaction(async (tx) => {
     // Serialize invites per group so a double-click can't create two.
     await tx.$queryRaw`SELECT "id" FROM "group" WHERE "id" = ${groupId} FOR UPDATE`;
 
@@ -80,7 +83,7 @@ export async function createInvitation(groupId: string, inviterId: string, email
     if (pending) throw new ConflictError("This email already has a pending invitation.");
     await requireUnderDailyLimit(tx, inviterId);
 
-    return tx.groupInvitation.create({
+    const invitation = await tx.groupInvitation.create({
       data: {
         groupId,
         email,
@@ -90,7 +93,29 @@ export async function createInvitation(groupId: string, inviterId: string, email
       },
       select: invitationForEmail,
     });
+
+    // Compare full emails ignoring case; "=" keeps "_" and "%" literal.
+    // LIMIT 2 detects case variants allowed by the case-sensitive unique email index.
+    const matchingUsers = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "user"
+      WHERE LOWER("email") = LOWER(${email.trim()})
+      LIMIT 2
+    `;
+    const hasUniqueRecipient = matchingUsers.length === 1;
+    const recipientId = hasUniqueRecipient ? matchingUsers[0].id : null;
+    if (recipientId) {
+      await createGroupNotification(tx, {
+        recipientId,
+        type: NotificationType.GROUP_INVITED,
+        groupId,
+      });
+    }
+
+    return { invitation, recipientId };
   });
+
+  if (recipientId) publishNotificationChanged(recipientId);
+  return invitation;
 }
 
 /**

@@ -3,8 +3,11 @@ import "server-only";
 import prisma from "@/lib/prisma";
 import type { CreateItemInput, UpdateItemInput } from "@/lib/items/item-validation";
 import type { Item } from "@/generated/prisma/client";
+import { NotificationType } from "@/generated/prisma/enums";
 import { ItemError } from "@/lib/items/item-errors";
 import { uploadImage, readImage, deleteImage } from "@/lib/storage";
+import { publishNotificationChanged } from "@/server/notifications/notification-events";
+import { createRequestNotification } from "@/server/notifications/notification.service";
 import type { ItemFilters, ItemSharingGroup } from "@/lib/items/item-types";
 
 // Expose listing data without including the owner's account or other relations.
@@ -134,19 +137,36 @@ export async function createItemAccess(currentUserId: string, itemId: string, gr
 }
 
 export async function deleteItemAccess(currentUserId: string, itemId: string, groupId: string) {
-  return prisma.$transaction(async transaction => {
+  const declinedRequests = await prisma.$transaction(async transaction => {
     // Use the same lock as request creation/approval to serialize revocation.
     const items = await transaction.$queryRaw<Item[]>`
       SELECT * FROM "Item" WHERE "itemId" = ${itemId} FOR UPDATE
     `;
     requireItemOwner(items[0], currentUserId);
     // Owners may revoke even after leaving a group. Existing loans retain history.
-    await transaction.request.updateMany({
+    const declinedRequests = await transaction.request.updateManyAndReturn({
       where: { itemId, groupId, requestStatus: "PENDING" },
       data: { requestStatus: "DECLINED" },
+      select: { requestId: true, borrowerId: true },
     });
+
+    for (const request of declinedRequests) {
+      await createRequestNotification(transaction, {
+        recipientId: request.borrowerId,
+        type: NotificationType.REQUEST_DECLINED,
+        requestId: request.requestId,
+      });
+    }
+
     await transaction.itemAccess.deleteMany({ where: { itemId, groupId } });
+    return declinedRequests;
   });
+
+  // Publish only after revocation and its decline notifications have committed.
+  const recipientIds = new Set(declinedRequests.map((request) => request.borrowerId));
+  for (const recipientId of recipientIds) {
+    publishNotificationChanged(recipientId);
+  }
 }
 
 function requireItemOwner(item: { ownerId: string } | null | undefined, userId: string) {
@@ -210,7 +230,7 @@ export async function updateItem(currentUserId: string, itemId: string, input: U
 }
 
 export async function archiveItem(currentUserId: string, itemId: string) {
-  return prisma.$transaction(async transaction => {
+  const { item: archivedItem, declinedRequests } = await prisma.$transaction(async transaction => {
     // Match request-service's lock order so approval cannot race with archiving.
     const items = await transaction.$queryRaw<Item[]>`
       SELECT * FROM "Item" WHERE "itemId" = ${itemId} FOR UPDATE
@@ -226,17 +246,36 @@ export async function archiveItem(currentUserId: string, itemId: string) {
       throw new ItemError("CONFLICT", "Return the item or resolve its approved request before archiving.");
     }
 
-    await transaction.request.updateMany({
+    const declinedRequests = await transaction.request.updateManyAndReturn({
       where: { itemId, requestStatus: "PENDING" },
       data: { requestStatus: "DECLINED" },
+      select: { requestId: true, borrowerId: true },
     });
+
+    for (const request of declinedRequests) {
+      await createRequestNotification(transaction, {
+        recipientId: request.borrowerId,
+        type: NotificationType.REQUEST_DECLINED,
+        requestId: request.requestId,
+      });
+    }
+
     // Repeated archive calls preserve the original archive timestamp.
-    return transaction.item.update({
+    const updatedItem = await transaction.item.update({
       where: { itemId },
       data: { itemArchivedAt: item.itemArchivedAt ?? new Date() },
       select: itemSelect,
-    }).then(withItemImage);
+    });
+    return { item: withItemImage(updatedItem), declinedRequests };
   });
+
+  // A borrower may have several declined requests across the item's sharing groups.
+  const recipientIds = new Set(declinedRequests.map((request) => request.borrowerId));
+  for (const recipientId of recipientIds) {
+    publishNotificationChanged(recipientId);
+  }
+
+  return archivedItem;
 }
 
 // Cleanup errors do not undo a committed replacement/removal. Log keys for retry.

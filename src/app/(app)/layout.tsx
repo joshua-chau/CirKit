@@ -1,10 +1,11 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Bell, Boxes, LayoutDashboard, Package, UsersRound } from "lucide-react";
+import { Boxes, LayoutDashboard, Package, UsersRound } from "lucide-react";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { UserMenu } from "@/components/layout/user-menu";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { NotificationBell } from "@/components/notifications/notification-bell";
+import { buttonVariants } from "@/components/ui/button";
 import prisma from "@/lib/prisma";
 import { DEFAULT_LOGIN_REDIRECT } from "@/lib/routes";
 import { requireUser } from "@/server/auth/session";
@@ -56,14 +57,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           >
             <Package className="size-5" aria-hidden="true" />
           </Link>
-          {/* TODO: Replace this placeholder with the SSE notification bell. */}
-          <span title="Notifications coming soon">
-            <Button type="button" variant="ghost" size="icon-lg" disabled aria-label="Notifications coming soon">
-              <Bell className="size-5" aria-hidden="true" />
-            </Button>
-          </span>
-          <Suspense fallback={<div className="size-9 animate-pulse rounded-full bg-muted" />}>
-            <AccountMenu />
+          <Suspense fallback={<div className="h-9 w-21 animate-pulse rounded-lg bg-muted" />}>
+            <AccountControls />
           </Suspense>
         </div>
       </header>
@@ -77,9 +72,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-async function AccountMenu() {
+async function AccountControls() {
   const user = await requireUser();
-  return <UserMenu name={user.name} email={user.email} image={user.image} />;
+  return (
+    <>
+      <NotificationBell key={user.id} />
+      <UserMenu name={user.name} email={user.email} image={user.image} />
+    </>
+  );
 }
 
 async function GroupsSidebar() {

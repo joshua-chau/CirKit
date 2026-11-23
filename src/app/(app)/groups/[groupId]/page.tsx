@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -60,14 +60,6 @@ async function GroupContent({ params, searchParams }: Props) {
   const { groupId } = await params;
   const user = await requireUser();
 
-  let group;
-  try {
-    group = await getGroupDetail(groupId, user.id);
-  } catch (error) {
-    // Non-members get a 404 so they can't tell whether the group exists.
-    if (error instanceof NotFoundError) notFound();
-    throw error;
-  }
   let filters: Filters = {};
   let filterError: string | null = null;
   try {
@@ -77,11 +69,22 @@ async function GroupContent({ params, searchParams }: Props) {
     filterError = error.message;
   }
   const hasFilters = Object.values(filters).some(Boolean);
-  const [invitations, items, listable] = await Promise.all([
-    group.viewer.canInvite ? getPendingGroupInvitations(groupId, user.id) : [],
-    filterError ? Promise.resolve([]) : getSharedItemsForGroup(groupId, user.id, filters),
-    getListableItems(user.id, groupId),
-  ]);
+  let group;
+  let invitations;
+  let items;
+  let listable;
+  try {
+    group = await getGroupDetail(groupId, user.id);
+    [invitations, items, listable] = await Promise.all([
+      group.viewer.canInvite ? getPendingGroupInvitations(groupId, user.id) : [],
+      filterError ? Promise.resolve([]) : getSharedItemsForGroup(groupId, user.id, filters),
+      getListableItems(user.id, groupId),
+    ]);
+  } catch (error) {
+    // Missing groups and lost membership both return to the user's own groups.
+    if (error instanceof NotFoundError) redirect("/groups");
+    throw error;
+  }
   const { viewer } = group;
 
   return (
@@ -121,7 +124,7 @@ async function GroupContent({ params, searchParams }: Props) {
             action={leaveGroupAction.bind(null, group.id)}
             pendingLabel="Leaving…"
             errorToastTitle="Couldn’t leave group"
-            confirmMessage={`Leave "${group.name}"? Your pending requests in this group will be declined and your items will stop being shared with it.`}
+            confirmMessage={`Leave "${group.name}"? Your pending borrowing requests will be cancelled, pending requests for your items will be declined, and your items will stop being shared with this group.`}
             variant="destructive"
           >
             Exit group

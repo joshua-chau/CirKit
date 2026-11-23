@@ -1,9 +1,12 @@
 import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
+import { NotificationType } from "@/generated/prisma/enums";
 import prisma from "@/lib/prisma";
 import type { GroupInput } from "@/lib/validation/group.schema";
 import { ConflictError, NotFoundError, ValidationError } from "@/server/errors";
+import { publishNotificationChanged } from "@/server/notifications/notification-events";
+import { createGroupNotification, createRequestNotification } from "@/server/notifications/notification.service";
 import { cleanupGroupImage } from "./group-image";
 import { lockGroup } from "./group.lock";
 import { requireGroupMember, requireGroupOwner } from "./group.permissions";
@@ -38,8 +41,8 @@ export async function updateGroup(groupId: string, userId: string, input: GroupI
  *
  * - Refused while the user has an APPROVED request in this group, either as
  *   the borrower or as the owner of the item (reserved or borrowed).
- * - Otherwise their PENDING requests in this group (both directions) are
- *   auto-DECLINED, and their items stop being shared with the group.
+ * - Their PENDING requests as a borrower are CANCELLED. Pending requests for
+ *   their own items are DECLINED, and those items stop being shared here.
  *
  * Locks the affected Item rows the same way request-service does
  * (SELECT … FOR UPDATE), so an approval cannot slip in mid-way.
@@ -81,17 +84,39 @@ async function detachMember(tx: Tx, groupId: string, userId: string) {
     );
   }
 
-  await tx.request.updateMany({
-    where: { ...involvesUser, requestStatus: "PENDING" },
-    data: { requestStatus: "DECLINED" },
+  const cancelledRequests = await tx.request.updateManyAndReturn({
+    where: { groupId, borrowerId: userId, requestStatus: "PENDING" },
+    data: { requestStatus: "CANCELLED" },
+    select: { requestId: true, borrowerId: true, item: { select: { ownerId: true } } },
   });
+
+  const declinedRequests = await tx.request.updateManyAndReturn({
+    where: { groupId, item: { ownerId: userId }, requestStatus: "PENDING" },
+    data: { requestStatus: "DECLINED" },
+    select: { requestId: true, borrowerId: true, item: { select: { ownerId: true } } },
+  });
+
+  const recipientIds = new Set<string>();
+  for (const request of [...cancelledRequests, ...declinedRequests]) {
+    const cancelled = request.borrowerId === userId;
+    // A departing borrower notifies the item owner; a departing owner notifies the borrower.
+    const recipientId = cancelled ? request.item.ownerId : request.borrowerId;
+    await createRequestNotification(tx, {
+      recipientId,
+      type: cancelled ? NotificationType.REQUEST_CANCELLED : NotificationType.REQUEST_DECLINED,
+      requestId: request.requestId,
+    });
+    recipientIds.add(recipientId);
+  }
+
   await tx.itemAccess.deleteMany({ where: { groupId, item: { ownerId: userId } } });
   await tx.groupMember.delete({ where: { groupId_userId: { groupId, userId } } });
+  return recipientIds;
 }
 
 /** A member leaves. The owner must transfer ownership first. */
 export async function leaveGroup(groupId: string, userId: string) {
-  await prisma.$transaction(async (tx) => {
+  const recipientIds = await prisma.$transaction(async (tx) => {
     await lockGroup(tx, groupId);
     const membership = await requireGroupMember(groupId, userId, tx);
 
@@ -104,8 +129,13 @@ export async function leaveGroup(groupId: string, userId: string) {
       );
     }
 
-    await detachMember(tx, groupId, userId);
+    return detachMember(tx, groupId, userId);
   });
+
+  // Membership, request changes and notifications must commit before sending SSE.
+  for (const recipientId of recipientIds) {
+    publishNotificationChanged(recipientId);
+  }
 }
 
 /** Owner only: remove another member. */
@@ -113,7 +143,7 @@ export async function removeMember(groupId: string, ownerId: string, memberUserI
   if (memberUserId === ownerId) {
     throw new ValidationError("You cannot remove yourself. Transfer ownership, then leave.");
   }
-  await prisma.$transaction(async (tx) => {
+  const recipientIds = await prisma.$transaction(async (tx) => {
     await lockGroup(tx, groupId);
     await requireGroupOwner(groupId, ownerId, tx);
 
@@ -122,8 +152,20 @@ export async function removeMember(groupId: string, ownerId: string, memberUserI
     });
     if (!target) throw new NotFoundError("That user is not a member of this group.");
 
-    await detachMember(tx, groupId, memberUserId);
+    const recipientIds = await detachMember(tx, groupId, memberUserId);
+    // The removed member is notified even when no pending requests were affected.
+    await createGroupNotification(tx, {
+      recipientId: memberUserId,
+      type: NotificationType.GROUP_MEMBER_REMOVED,
+      groupId,
+    });
+    recipientIds.add(memberUserId);
+    return recipientIds;
   });
+
+  for (const recipientId of recipientIds) {
+    publishNotificationChanged(recipientId);
+  }
 }
 
 /** Owner only: make another member the owner; the old owner becomes a MEMBER. */
